@@ -1,0 +1,10 @@
+# Daftar paket resmi Arch untuk OXWM (dibaca seksi install_packages)
+base-devel git
+xorg-server xorg-xinit xorg-xsetroot
+zig libx11 libxft freetype2 fontconfig libxinerama
+alacritty rofi picom feh scrot
+ttf-jetbrains-mono ttf-font-awesome
+network-manager-applet pavucontrol
+lightdm lightdm-gtk-greeter
+sqlite3
+# AUR (via yay): oxwm-git

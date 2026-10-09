@@ -1,0 +1,5 @@
+#!/bin/sh
+# ~/.xinitrc — dipakai bila login tanpa display manager (startx).
+# Dipasang oleh oxwm-installer bila belum ada.
+xsetroot -cursor_name left_ptr &
+exec oxwm
