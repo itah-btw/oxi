@@ -22,7 +22,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 ## Cara penggunaan
 
 ```bash
-git clone https://github.com/USERNAME_KAMU/oxwm-installer.git
+git clone https://github.com/itah-btw/oxwm-installer.git
 cd oxwm-installer
 chmod +x install.sh
 
@@ -84,7 +84,7 @@ git init
 git add .
 git commit -m "oxwm-installer: instalasi otomatis OXWM di Arch Linux"
 git branch -M main
-git remote add origin https://github.com/USERNAME_KAMU/oxwm-installer.git
+git remote add origin https://github.com/itah-btw/oxwm-installer.git
 git push -u origin main
 ```
 
