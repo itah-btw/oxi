@@ -1,13 +1,21 @@
 # oxwm-installer
 
-Script instalasi otomatis window manager **OXWM** di **Arch Linux** — cukup satu perintah, desktop siap pakai. Terinspirasi installer komunitas seperti DankLinux.
+Script instalasi otomatis window manager **OXWM**, **distro-agnostic** — cukup satu perintah, desktop siap pakai. Terinspirasi installer komunitas seperti DankLinux.
 
-OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — di Arch dipasang dari AUR (`oxwm-git`).
+OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — script membangunnya dari source sehingga seragam di semua distro.
+
+## Distro yang didukung
+
+| Distro | Package manager | Catatan |
+|---|---|---|
+| Arch Linux | pacman | Semua dependensi dari repo resmi |
+| Debian / Ubuntu | apt | `zig` tidak ada di repo → diunduh otomatis sebagai tarball resmi |
+| Fedora | dnf | Semua dependensi dari repo resmi |
 
 ## Yang dipasang script ini
 
-- Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype2`, `fontconfig`, `libxinerama`)
-- OXWM dari AUR via `yay` (dipasang otomatis bila belum ada)
+- Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
+- OXWM dibangun dari source (`zig build`), terpasang di `/usr/local/bin/oxwm` + file sesi display manager
 - Aplikasi pendukung: `alacritty`, `rofi`, `picom`, `feh`, `scrot`, font JetBrains Mono + Font Awesome, applet jaringan & audio
 - Display manager `lightdm` (diaktifkan saat boot)
 - Dotfiles standar: `~/.config/oxwm/config.lua` + `~/.xinitrc` (hanya bila belum ada; config lama dibackup)
@@ -15,7 +23,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 ## Kebutuhan
 
-- Arch Linux fresh (disarankan mesin virtual dulu)
+- Salah satu: Arch Linux, Debian/Ubuntu, atau Fedora (disarankan coba di mesin virtual dulu)
 - Akses `sudo` + koneksi internet
 - Dijalankan sebagai user biasa via `sudo` (jangan langsung sebagai root)
 

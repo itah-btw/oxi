@@ -1,0 +1,10 @@
+# Debian/Ubuntu (apt). zig tidak ada di repo -> tarball resmi via ensure_zig().
+git curl build-essential
+xorg xinit x11-xserver-utils
+libx11-dev libxft-dev libfreetype6-dev libfontconfig1-dev libxinerama-dev
+alacritty rofi picom feh scrot
+fonts-jetbrains-mono fonts-font-awesome
+network-manager-gnome pavucontrol
+lightdm lightdm-gtk-greeter
+sqlite3
+# OXWM: dibangun dari source (https://github.com/tonybanters/oxwm)
