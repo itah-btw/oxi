@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# dmenu_run bertema oxwm (baca ~/.config/oxwm/theme).
+# Dipasang di /usr/local/bin oleh install.sh; meneruskan ke dmenu_run asli
+# (dicari di PATH di luar /usr/local/bin agar tak rekursi ke diri sendiri).
+set -euo pipefail
+
+theme=$(cat "$HOME/.config/oxwm/theme" 2>/dev/null || echo tokyonight)
+theme="${theme//[[:space:]]/}"
+case "$theme" in
+    gruvbox) nb="#282828"; nf="#ebdbb2"; sb="#83a598" ;;
+    catppuccin) nb="#1e1e2e"; nf="#cdd6f4"; sb="#89b4fa" ;;
+    *) nb="#1a1b26"; nf="#bbbbbb"; sb="#6dade3" ;;
+esac
+
+real_bin=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+    [[ "$d" == "/usr/local/bin" ]] && continue
+    if [[ -x "$d/dmenu_run" ]]; then real_bin="$d/dmenu_run"; break; fi
+done
+[[ -n "$real_bin" ]] || { echo "dmenu_run asli tidak ketemu di PATH" >&2; exit 1; }
+
+exec "$real_bin" -nb "$nb" -nf "$nf" -sb "$sb" -sf "$nb" -fn "JetBrainsMono Nerd Font:size=10" "$@"

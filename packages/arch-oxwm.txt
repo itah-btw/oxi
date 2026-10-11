@@ -1,10 +1,13 @@
 # Arch Linux (pacman). OXWM dibangun dari source agar seragam lintas distro.
-git curl base-devel
+git curl unzip base-devel
 xorg-server xorg-xinit xorg-xsetroot
 zig libx11 libxft freetype2 fontconfig libxinerama
-alacritty rofi picom feh scrot
+dmenu feh maim slop xdotool
 ttf-jetbrains-mono ttf-font-awesome
-network-manager-applet pavucontrol
-lightdm lightdm-gtk-greeter
+dunst xclip libnotify brightnessctl btop fastfetch khal tesseract
+power-profiles-daemon networkmanager bluez-utils
 sqlite3
 # OXWM: dibangun dari source (https://github.com/tonybanters/oxwm)
+# Font Nerd (ikon topbar) dipastikan via unduhan bila tak ada di sistem.
+# Opsional (tak ada di repo resmi): clipmenu (AUR), bluetui/wiremix (cargo),
+# yazi (extra).

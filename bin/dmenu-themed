@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# dmenu bertema oxwm untuk menu kustom (clipboard, daya, sesi).
+# Dipasang di /usr/local/bin oleh install.sh; meneruskan ke dmenu asli.
+set -euo pipefail
+
+theme=$(cat "$HOME/.config/oxwm/theme" 2>/dev/null || echo tokyonight)
+theme="${theme//[[:space:]]/}"
+case "$theme" in
+    gruvbox) nb="#282828"; nf="#ebdbb2"; sb="#83a598" ;;
+    catppuccin) nb="#1e1e2e"; nf="#cdd6f4"; sb="#89b4fa" ;;
+    *) nb="#1a1b26"; nf="#bbbbbb"; sb="#6dade3" ;;
+esac
+
+real_bin=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+    [[ "$d" == "/usr/local/bin" ]] && continue
+    if [[ -x "$d/dmenu" && ! -d "$d/dmenu" ]]; then real_bin="$d/dmenu"; break; fi
+done
+[[ -n "$real_bin" ]] || { echo "dmenu asli tidak ketemu di PATH" >&2; exit 1; }
+
+exec "$real_bin" -nb "$nb" -nf "$nf" -sb "$sb" -sf "$nb" -fn "JetBrainsMono Nerd Font:size=10" "$@"

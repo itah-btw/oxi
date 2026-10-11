@@ -1,10 +1,12 @@
 # Fedora (dnf)
-git curl @development-tools
+git curl unzip @development-tools
 xorg-x11-server-Xorg xinit xorg-x11-server-utils
 zig libX11-devel libXft-devel freetype-devel fontconfig-devel libXinerama-devel
-alacritty rofi picom feh scrot
+dmenu feh maim slop xdotool
 jetbrains-mono-fonts fontawesome-fonts
-NetworkManager-applet pavucontrol
-lightdm lightdm-gtk
+dunst xclip libnotify brightnessctl btop fastfetch khal tesseract
+power-profiles-daemon NetworkManager bluez
 sqlite
 # OXWM: dibangun dari source (https://github.com/tonybanters/oxwm)
+# Font Nerd (ikon topbar) dipastikan via unduhan bila tak ada di sistem.
+# Opsional: clipmenu (manual), bluetui/wiremix (cargo), yazi.

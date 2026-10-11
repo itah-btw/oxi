@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# dunst bertema oxwm: pilih dunstrc sesuai ~/.config/oxwm/theme.
+# Dipasang di /usr/local/bin oleh install.sh; meneruskan ke dunst asli.
+set -euo pipefail
+
+theme=$(cat "$HOME/.config/oxwm/theme" 2>/dev/null || echo tokyonight)
+theme="${theme//[[:space:]]/}"
+case "$theme" in
+    gruvbox|catppuccin) ;;
+    *) theme=tokyonight ;;
+esac
+
+real_bin=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+    [[ "$d" == "/usr/local/bin" ]] && continue
+    if [[ -x "$d/dunst" && ! -d "$d/dunst" ]]; then real_bin="$d/dunst"; break; fi
+done
+[[ -n "$real_bin" ]] || { echo "dunst asli tidak ketemu di PATH" >&2; exit 1; }
+
+exec "$real_bin" -config "$HOME/.config/oxwm/dunstrc-$theme" "$@"

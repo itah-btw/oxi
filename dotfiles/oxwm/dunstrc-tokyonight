@@ -1,0 +1,34 @@
+[global]
+    monitor = 0
+    follow = mouse
+      width = 320
+      height = (0, 120)
+      origin = top-right
+      offset = (12, 44)
+    font = JetBrainsMono Nerd Font 10
+    background = "#1a1b26"
+    foreground = "#bbbbbb"
+    frame_color = "#6dade3"
+    frame_width = 2
+      corner_radius = 0
+    gap_size = 8
+    padding = 12
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    stack_duplicates = true
+    show_age_threshold = 60
+    idle_threshold = 120
+[urgency_low]
+    background = "#1a1b26"
+    foreground = "#bbbbbb"
+    timeout = 5
+[urgency_normal]
+    background = "#1a1b26"
+    foreground = "#bbbbbb"
+    timeout = 10
+[urgency_critical]
+    background = "#f7768e"
+    foreground = "#1a1b26"
+    frame_color = "#f7768e"
+    timeout = 0

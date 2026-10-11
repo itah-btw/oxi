@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# oxwm-theme — ganti tema oxwm dalam sekali perintah.
+# Pakai: oxwm-theme {tokyonight|gruvbox|catppuccin}
+#
+# Menulis ~/.config/oxwm/theme, memasang wallpaper tema itu via feh, lalu
+# me-reload oxwm (butuh DISPLAY + xdotool; tanpanya, reload manual
+# Mod4+Shift+R — file tema dan wallpaper tetap berganti).
+set -euo pipefail
+
+THEME_DIR="$HOME/.config/oxwm"
+
+case "${1:-}" in
+    tokyonight|gruvbox|catppuccin) ;;
+    *) echo "pakai: oxwm-theme {tokyonight|gruvbox|catppuccin}" >&2; exit 2 ;;
+esac
+
+echo "$1" > "$THEME_DIR/theme"
+if ! feh --bg-fill "$THEME_DIR/wallpapers/$1."* 2>/dev/null; then
+    echo "peringatan: wallpaper gagal dipasang (X tidak aktif?)" >&2
+fi
+
+# dunst tidak membaca ulang config sendiri: cocokkan daemon yang berjalan
+# lewat path confignya, ganti dengan tema baru bila ia memang hidup.
+if command -v dunst >/dev/null 2>&1 && pkill -f "oxwm/dunstrc-" 2>/dev/null; then
+    sleep 0.5
+    (dunst >/dev/null 2>&1 &)
+fi
+
+if [[ -n "${DISPLAY:-}" ]] && command -v xdotool >/dev/null; then
+    xdotool key Super_L+Shift+r
+else
+    echo "reload manual: tekan Mod4+Shift+R untuk menerapkan warna" >&2
+fi
