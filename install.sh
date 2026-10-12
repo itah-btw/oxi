@@ -24,6 +24,7 @@ WM="oxwm"
 DISTRO=""
 ZIG_VERSION="0.16.0"          # dipakai bila distro tidak menyediakan paket zig (oxwm butuh zig>=0.16)
 OXWM_REPO="https://github.com/tonybanters/oxwm"
+OXWM_PIN="472c76753fed1e1430014328237da1db053bbb64" # komit oxwm yang teruji (HEAD 2026-10-07); timpa via OXWM_PIN=... bila perlu
 REPO_SLUG="itah-btw/oxwm-installer"
 REF="${OXWM_REF:-main}"         # timpa untuk coba cabang lain: OXWM_REF=dev ... | bash
 REPO_DIR=""                     # diisi resolve_repo_dir(); jangan diakses langsung
@@ -280,13 +281,18 @@ install_oxwm() { # bangun dari source: seragam di semua distro
         log "(dry-run) lewati clone + build oxwm"
     else
         rm -rf "$build_dir"
+        # Pin ke komit teruji agar hasil dapat diulang (HEAD yang bergeser
+        # pernah merusak build, mis. zig 0.13). Checkout sebagai pemilik repo
+        # agar tak kena dubious ownership bila SUDO_USER terlibat.
         if [[ -n "${SUDO_USER:-}" ]]; then
             su "$SUDO_USER" -c "git clone --depth 1 $OXWM_REPO $build_dir"
-            (cd "$build_dir" && zig build -Doptimize=ReleaseSmall)
+            su "$SUDO_USER" -c "git -C $build_dir fetch --depth 1 origin $OXWM_PIN && git -C $build_dir checkout -q $OXWM_PIN"
         else
             git clone --depth 1 "$OXWM_REPO" "$build_dir"
-            (cd "$build_dir" && zig build -Doptimize=ReleaseSmall)
+            git -C "$build_dir" fetch --depth 1 origin "$OXWM_PIN" && git -C "$build_dir" checkout -q "$OXWM_PIN"
         fi
+        log "oxwm dipin ke komit $OXWM_PIN"
+        (cd "$build_dir" && zig build -Doptimize=ReleaseSmall)
         install -m 0755 "$build_dir/zig-out/bin/oxwm" /usr/local/bin/oxwm
         rm -rf "$build_dir"
     fi
