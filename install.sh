@@ -311,6 +311,9 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
     else
         git clone --depth 1 "$repo" "$build_dir"
     fi
+    # Simpan config murni sekali: reset via git rapuh bila root membangun di
+    # repo milik user lain (dubious ownership) sehingga varian ikut tercemar.
+    cp "$build_dir/config.def.h" /tmp/st-config.def.h.orig
     for theme in tokyonight gruvbox catppuccin; do
         case "$theme" in
             gruvbox) fg="#ebdbb2"; bg="#282828"; cur="#ebdbb2"
@@ -331,7 +334,8 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
         esac
         (
             cd "$build_dir"
-            git checkout -- config.def.h 2>/dev/null || true
+            cp /tmp/st-config.def.h.orig config.def.h
+            rm -f config.h
             sed -i \
                 -e "s|\"gray90\", /\\* default foreground colour \\*/|\"${fg}\",|" \
                 -e "s|\"black\", /\\* default background colour \\*/|\"${bg}\",|" \
@@ -360,6 +364,10 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
             make clean >/dev/null 2>&1 || true
         ) || die "build st-$theme gagal"
     done
+    # Verifikasi fail-loud: tiga varian harus benar-benar berbeda binernya.
+    if [[ $(md5sum /usr/local/bin/st-tokyonight /usr/local/bin/st-gruvbox /usr/local/bin/st-catppuccin | awk '{print $1}' | sort -u | wc -l) -ne 3 ]]; then
+        die "build st gagal: tiga varian biner identik (palet tercemar)"
+    fi
     cat > /usr/local/bin/st <<'EOF'
 #!/bin/sh
 # Dispatcher tema st (baca ~/.config/oxwm/theme).
