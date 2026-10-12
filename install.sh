@@ -22,7 +22,7 @@ THEME="tokyonight"
 THEME_SET=0
 WM="oxwm"
 DISTRO=""
-ZIG_VERSION="0.13.0"          # dipakai bila distro tidak menyediakan paket zig
+ZIG_VERSION="0.16.0"          # dipakai bila distro tidak menyediakan paket zig (oxwm butuh zig>=0.16)
 OXWM_REPO="https://github.com/tonybanters/oxwm"
 REPO_SLUG="itah-btw/oxwm-installer"
 REF="${OXWM_REF:-main}"         # timpa untuk coba cabang lain: OXWM_REF=dev ... | bash
@@ -262,7 +262,7 @@ ensure_zig() { # pastikan compiler zig ada; unduh tarball resmi bila tak tersedi
         if [[ "$DRY_RUN" -eq 1 ]]; then
             log "(dry-run) lewati unduhan zig"
         else
-            curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" \
+            curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
                 -o /tmp/zig.tar.xz
             rm -rf /opt/zig && mkdir -p /opt/zig
             tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
