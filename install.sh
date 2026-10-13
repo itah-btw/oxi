@@ -21,7 +21,8 @@ REBUILD=0
 THEME="tokyonight"
 THEME_SET=0
 DISTRO=""
-ZIG_MIN="0.16.0"              # zig sistem yang lebih tua dari ini diganti tarball stabil terbaru (oxwm butuh zig>=0.16)
+ZIG_VERSION="0.16.0"          # TERPIN: oxwm HEAD butuh zig 0.16.x (build.zig pakai b.args yang dihapus di zig 0.17)
+ZIG_SHA256="70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00" # sha256 zig-x86_64-linux-0.16.0.tar.xz resmi (terverifikasi dari unduhan langsung)
 OXWM_REPO="https://github.com/tonybanters/oxwm"
 OXWM_PIN="${OXWM_PIN:-}"      # kosong = bangun dari HEAD terbaru; isi SHA-1 40 digit untuk pin reproduksibel
 REPO_SLUG="itah-btw/oxwm-installer"
@@ -139,7 +140,7 @@ declare -A PKGMAP=(
     [xsetroot]="xorg-xsetroot|x11-xserver-utils|xsetroot"
     [zigbuild]="zig||zig"
     # Kolom Debian dikosongkan: Debian/Ubuntu tanpa paket zig resmi,
-    # ensure_zig() mengunduh tarball stabil terbaru bila zig tak ada/kedaluarsa.
+    # ensure_zig() memasang tarball 0.16.0 (seri yang didukung oxwm) bila perlu.
     [x11]="libx11|libx11-dev|libX11-devel"
     [xft]="libxft|libxft-dev|libXft-devel"
     [freetype]="freetype2|libfreetype6-dev|freetype-devel"
@@ -303,43 +304,31 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
     tahap "fastfetch" "ok" "terpasang"
 }
 
-ensure_zig() { # pastikan compiler zig ada & cukup baru; kalau tidak, unduh tarball stabil terbaru
+ensure_zig() { # pastikan compiler zig seri 0.16.x ada (yang didukung oxwm); kalau tidak, unduh tarball resmi
     if command -v zig >/dev/null; then
         local zv
         zv="$(zig version)"
-        if [[ "$(printf '%s\n%s\n' "$zv" "$ZIG_MIN" | sort -V | head -n1)" == "$ZIG_MIN" ]]; then
-            log "zig sudah ada & cukup baru: $zv"
+        if [[ "$zv" == 0.16.* ]]; then
+            log "zig sudah ada & cocok: $zv"
             return 0
         fi
-        log "zig sistem terlalu tua ($zv, butuh >= $ZIG_MIN) -> unduh tarball terbaru"
+        log "zig sistem ($zv) di luar seri 0.16.x -> pasang tarball $ZIG_VERSION"
     fi
-    tahap "zig" "mulai" "tarball stabil terbaru"
+    tahap "zig" "mulai" "tarball $ZIG_VERSION"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati unduhan zig"
         return 0
     fi
-    # Selalu ambil rilis stabil terbaru dari indeks resmi (bukan versi mati di script).
-    local idx=/tmp/zig-index.json
-    curl -fsSL "https://ziglang.org/download/index.json" -o "$idx" \
-        || die "gagal ambil indeks rilis zig"
-    local ver
-    ver="$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+":' "$idx" | tr -d '":' | sort -V | tail -n1)"
-    [[ -n "$ver" ]] || die "gagal deteksi versi zig terbaru"
-    local sum
-    sum="$(awk -v key="\"${ver}\":" 'index($0, key) {f=1} f && /x86_64-linux/ {p=1} p && /shasum/ {print; exit}' "$idx" \
-        | grep -m1 -oE '[0-9a-f]{64}')"
-    [[ -n "$sum" ]] || die "gagal baca checksum zig $ver dari indeks"
-    log "zig stabil terbaru: $ver"
     local arsip=/tmp/zig.tar.xz
-    curl -fL "https://ziglang.org/download/${ver}/zig-x86_64-linux-${ver}.tar.xz" \
+    curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
         -o "$arsip" || die "unduhan zig gagal"
     log "verifikasi sha256 tarball zig..."
-    echo "${sum}  ${arsip}" | sha256sum -c - \
+    echo "${ZIG_SHA256}  ${arsip}" | sha256sum -c - \
         || die "checksum zig tak cocok (unduhan rusak/disusupi?)"
     rm -rf /opt/zig && mkdir -p /opt/zig
     tar -xJf "$arsip" -C /opt/zig --strip-components=1 || die "ekstraksi zig gagal"
     ln -sf /opt/zig/zig /usr/local/bin/zig
-    rm -f "$arsip" "$idx"
+    rm -f "$arsip"
     command -v zig >/dev/null || die "zig tak ketemu setelah dipasang"
     log "zig terpasang: $(zig version)"
     tahap "zig" "ok" "tarball terpasang"

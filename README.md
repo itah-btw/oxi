@@ -17,7 +17,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 | Distro | Package manager | Catatan |
 |---|---|---|
 | Arch Linux | pacman | Semua dependensi dari repo resmi |
-| Debian / Ubuntu | apt | `zig` tidak ada di repo → tarball stabil terbaru otomatis; `fastfetch` di rilis lama → `.deb` upstream |
+| Debian / Ubuntu | apt | `zig` tidak ada di repo → tarball 0.16.x otomatis (seri yang didukung oxwm); `fastfetch` di rilis lama → `.deb` upstream |
 | Fedora | dnf | Semua dependensi dari repo resmi |
 
 ## Yang dipasang script ini
