@@ -17,18 +17,18 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 | Distro | Package manager | Catatan |
 |---|---|---|
 | Arch Linux | pacman | Semua dependensi dari repo resmi |
-| Debian / Ubuntu | apt | `zig` tidak ada di repo → diunduh otomatis sebagai tarball resmi |
+| Debian / Ubuntu | apt | `zig` tidak ada di repo → tarball stabil terbaru otomatis; `fastfetch` di rilis lama → `.deb` upstream |
 | Fedora | dnf | Semua dependensi dari repo resmi |
 
 ## Yang dipasang script ini
 
 - Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
-- OXWM dibangun dari source (`zig build`), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxwm-theme`, `dmenu_run`/`dmenu-themed`/`dunst` bertema)
+- OXWM dibangun dari source HEAD terbaru (`zig build`), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxwm-theme`, `dmenu_run`/`dmenu-themed`/`dunst` bertema)
 - Terminal `st` dibangun dari source suckless dalam 3 tema + dispatcher `st` (ikut file tema oxwm)
 - Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome (font Nerd diunduh bila tak ada), `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` rilis upstream), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl)
-- Tanpa display manager: autologin getty di tty1 + `startx` otomatis (DM lama seperti LightDM/GDM/SDDM dimatikan bila ada)
+- Tanpa display manager: autologin getty di tty1 + `startx` otomatis (DM lama seperti LightDM/GDM/GDM3/SDDM dimatikan bila ada)
 - Dotfiles: `~/.config/oxwm/` (config + topbar, keybind, palet + wallpaper 3 tema, dunst bertema, skrip status cpu/temp/wifi/bt) + `~/.config/khal/` + `~/.xinitrc` (config lama dibackup)
-- Riwayat instalasi: `install.log` + basis data `install_history.db` (bila `sqlite3` tersedia)
+- Log instalasi: `/var/log/oxwm-installer/install.log` (fallback `./install.log` bila direktori itu tak bisa ditulis)
 
 ## Kebutuhan
 
@@ -38,11 +38,11 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 ## Cara penggunaan
 
-Satu baris (butuh `curl`; tanpa klon dulu):
+Satu baris (butuh `curl`; tanpa klon dulu; mode pipe wajib `--yes`):
 
 ```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash
-curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox
+curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --yes
+curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox --yes
 ```
 
 Atau cara klasik:
@@ -67,6 +67,7 @@ Opsi lain:
 ```bash
 ./install.sh --help            # bantuan
 sudo ./install.sh --yes        # lewati konfirmasi
+sudo ./install.sh --rebuild    # bangun ulang oxwm + st walau sudah ada
 sudo ./install.sh --theme gruvbox --yes  # langsung pakai tema gruvbox
 ```
 
@@ -113,16 +114,16 @@ tidak mengubah file tema yang sudah ada.
 ## Troubleshooting
 
 - **"jalankan dengan sudo"** → pakai `sudo ./install.sh`, bukan sebagai root langsung.
-- **"pacman tidak ditemukan"** → script ini khusus Arch Linux.
-- **Gagal di satu paket** → baca pesan error + `install.log`, perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten).
-- **Config lama** → tersimpan di `~/.config-backup-TANGGAL/`, tinggal kembalikan manual.
-- **Cek riwayat** → `sqlite3 install_history.db "SELECT * FROM log_tahap;"` atau baca `install.log`.
+- **"distro tidak didukung"** → butuh Arch Linux, Debian/Ubuntu, atau Fedora.
+- **Gagal di satu paket** → baca pesan error + log (`/var/log/oxwm-installer/install.log`), perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten; `--rebuild` bila ingin bangun ulang dari source).
+- **Config lama** → tersimpan di `~/.config-backup-TANGGAL-JAM/`, tinggal kembalikan manual.
+- **Cek riwayat tahap** → `grep '\[.*\]' /var/log/oxwm-installer/install.log`.
 
 ## Struktur repo
 
 ```
 oxwm-installer/
-├── install.sh                       # script utama (--theme untuk tema awal)
+├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--theme)
 ├── bin/oxwm-theme                  # perintah ganti tema (terpasang ke /usr/local/bin)
 ├── bin/dmenu_run, bin/dmenu-themed # dmenu bertema (terpasang ke /usr/local/bin)
 ├── bin/dunst                       # dunst bertema (terpasang ke /usr/local/bin)
@@ -133,8 +134,12 @@ oxwm-installer/
 ├── dotfiles/oxwm/*-status.sh        # skrip blok topbar (cpu/temp/wifi/bt/vol/mic/bright)
 ├── dotfiles/oxwm/theme              # tema bawaan (tokyonight)
 ├── dotfiles/khal/config             # kalender lokal minimal (ikhal)
+├── dotfiles/fastfetch/config.jsonc  # config fastfetch
 ├── dotfiles/xinitrc                 # dipakai startx
 ├── packages/{arch,debian,fedora}-oxwm.txt  # daftar paket
+├── screenshots/                     # cuplikan layar untuk README
+├── tests/smoke.sh                   # uji asap (sintaks + fungsi murni)
+├── .github/workflows/ci.yml         # CI: shellcheck + uji asap
 └── README.md
 ```
 

@@ -1,36 +1,56 @@
 #!/usr/bin/env bash
 #
-# oxwm-installer — instalasi otomatis window manager OXWM, distro-agnostic.
+# oxwm-installer — instalasi otomatis window manager OXWM.
 # Didukung: Arch Linux (pacman), Debian/Ubuntu (apt), Fedora (dnf).
-# Cara pakai: sudo ./install.sh [--dry-run] [--yes] [--theme NAMA] [--help]
+# Cara pakai: sudo ./install.sh [--dry-run] [--yes] [--rebuild] [--theme NAMA] [--help]
 #
-# Alur: cek root -> deteksi distro -> konfirmasi -> update sistem ->
-#       instal paket (nama dipetakan per distro) -> pastikan toolchain zig ->
-#       pastikan font Nerd -> bangun & pasang OXWM dari source ->
-#       pasang perintah pendamping -> deploy dotfiles (topbar, keybind, tema,
-#       dmenu/dunst bertema, skrip status, khal) -> autologin getty tty1 +
-#       startx otomatis -> catat riwayat -> selesai.
+# Alur: siapkan log -> cek root -> deteksi distro -> konfirmasi ->
+#       update sistem -> instal paket (nama dipetakan per distro) ->
+#       pastikan fastfetch/zig/font Nerd -> bangun & pasang OXWM dari source ->
+#       bangun st 3 tema -> pasang perintah pendamping ->
+#       deploy dotfiles (topbar, keybind, tema, dmenu/dunst bertema,
+#       skrip status, khal) -> autologin getty tty1 + startx otomatis -> selesai.
 #
 # Tanpa display manager: login konsol otomatis di tty1 lalu startx.
 set -euo pipefail
 
-LOG_FILE="install.log"
-DB_FILE="install_history.db"
+LOG_FILE="install.log"  # ditimpa init_log() ke path tetap bila bisa ditulis
 DRY_RUN=0
 ASSUME_YES=0
+REBUILD=0
 THEME="tokyonight"
 THEME_SET=0
-WM="oxwm"
 DISTRO=""
-ZIG_VERSION="0.16.0"          # dipakai bila distro tidak menyediakan paket zig (oxwm butuh zig>=0.16)
+ZIG_MIN="0.16.0"              # zig sistem yang lebih tua dari ini diganti tarball stabil terbaru (oxwm butuh zig>=0.16)
 OXWM_REPO="https://github.com/tonybanters/oxwm"
-OXWM_PIN="472c76753fed1e1430014328237da1db053bbb64" # komit oxwm yang teruji (HEAD 2026-10-07); timpa via OXWM_PIN=... bila perlu
+OXWM_PIN="${OXWM_PIN:-}"      # kosong = bangun dari HEAD terbaru; isi SHA-1 40 digit untuk pin reproduksibel
 REPO_SLUG="itah-btw/oxwm-installer"
 REF="${OXWM_REF:-main}"         # timpa untuk coba cabang lain: OXWM_REF=dev ... | bash
 REPO_DIR=""                     # diisi resolve_repo_dir(); jangan diakses langsung
 
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG_FILE"; }
-die() { log "ERROR: $*"; log_db "fatal" "gagal" "$*"; exit 1; }
+die() { log "ERROR: $*"; exit 1; }
+tahap() { # $1=tahap $2=status $3=pesan — riwayat tahap ke berkas log
+    # Status "ok" untuk langkah yang dilewati (dry-run) adalah dusta.
+    if [[ "$DRY_RUN" -eq 1 && "$2" == "ok" ]]; then
+        log "(dry-run) [$1] dilewati: $3"
+    else
+        log "[$1] $2: $3"
+    fi
+}
+valid_user() { [[ "${1:-}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; } # nama user Linux yang waras
+
+# --- Log: path tetap, bukan cwd acak tempat sudo dijalankan ---
+init_log() {
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        local dir="${OXWM_LOG_DIR:-/var/log/oxwm-installer}"
+        if mkdir -p "$dir" 2>/dev/null && touch "$dir/install.log" 2>/dev/null; then
+            LOG_FILE="$dir/install.log"
+        else
+            log "peringatan: $dir tak bisa ditulis, log ke ./install.log"
+        fi
+    fi
+}
 
 # --- Lokasi repo (mendukung one-liner via pipe) ---
 # Bila dijalankan dari pipe (curl ... | bash), BASH_SOURCE tak menunjuk ke
@@ -70,27 +90,13 @@ user_home() { # $1=user -> cetak $HOME-nya atau gagal
     printf '%s' "$h"
 }
 
-# --- Riwayat instalasi (SQLite, fallback ke berkas bila sqlite3 tak ada) ---
-db_init() {
-    command -v sqlite3 >/dev/null || { log "sqlite3 tidak ada, riwayat hanya ke berkas log"; return 1; }
-    sqlite3 "$DB_FILE" "CREATE TABLE IF NOT EXISTS instalasi(id INTEGER PRIMARY KEY AUTOINCREMENT, waktu_mulai TEXT, distro TEXT, wm TEXT, status TEXT);
-        CREATE TABLE IF NOT EXISTS log_tahap(id INTEGER PRIMARY KEY AUTOINCREMENT, id_instalasi INTEGER, waktu TEXT, tahap TEXT, status TEXT, pesan TEXT);"
-    RUN_ID=$(sqlite3 "$DB_FILE" "INSERT INTO instalasi(waktu_mulai, distro, wm, status) VALUES(datetime('now'),'${DISTRO:-?}','${WM}','berjalan'); SELECT last_insert_rowid();")
-    log "riwayat sesi #$RUN_ID dibuka di $DB_FILE"
-}
-
-log_db() { # $1=tahap $2=status $3=pesan
-    [[ -n "${RUN_ID:-}" ]] || return 0
-    sqlite3 "$DB_FILE" "INSERT INTO log_tahap(id_instalasi, waktu, tahap, status, pesan) VALUES($RUN_ID, datetime('now'), '$1', '$2', '$3');" 2>/dev/null || true
-}
-
 usage() {
     cat <<'EOF'
 Pakai: sudo ./install.sh [OPSI]
 
-Satu baris (butuh curl; tanpa klon dulu):
-  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash
-  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox
+Satu baris (butuh curl; tanpa klon dulu; mode pipe wajib --yes eksplisit):
+  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --yes
+  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox --yes
   (cermin jsDelivr dari repo yang sama; URL mentah GitHub juga bisa dipakai)
   Cabang lain: OXWM_REF=dev ... | sudo bash -s -- --theme gruvbox
 
@@ -98,7 +104,8 @@ Distro didukung: Arch Linux, Debian/Ubuntu, Fedora (terdeteksi otomatis).
 
   --dry-run   simulasi saja: tampilkan rencana tanpa mengubah sistem
               (tidak butuh sudo)
-  --yes       lewati konfirmasi (untuk otomatisasi)
+  --yes       lewati konfirmasi (untuk otomatisasi; wajib bila via pipe)
+  --rebuild   bangun ulang oxwm + st walau binernya sudah ada
   --theme NAMA
               tema awal: tokyonight (bawaan) | gruvbox | catppuccin.
               Menimpa ~/.config/oxwm/theme; tanpa flag ini file tema
@@ -119,6 +126,7 @@ check_root() {
     fi
     [[ "$EUID" -eq 0 ]] || die "jalankan dengan sudo: sudo ./install.sh"
     [[ -n "${SUDO_USER:-}" ]] || die "jalankan via sudo dari user biasa (bukan langsung sebagai root)"
+    valid_user "$SUDO_USER" || die "SUDO_USER tidak valid: '$SUDO_USER'"
     TARGET_HOME="$(user_home "$SUDO_USER")"
     log "user target: $SUDO_USER ($TARGET_HOME)"
 }
@@ -131,7 +139,7 @@ declare -A PKGMAP=(
     [xsetroot]="xorg-xsetroot|x11-xserver-utils|xsetroot"
     [zigbuild]="zig||zig"
     # Kolom Debian dikosongkan: Debian/Ubuntu tanpa paket zig resmi,
-    # ensure_zig() akan mengunduh tarball resmi bila binari zig belum ada.
+    # ensure_zig() mengunduh tarball stabil terbaru bila zig tak ada/kedaluarsa.
     [x11]="libx11|libx11-dev|libX11-devel"
     [xft]="libxft|libxft-dev|libXft-devel"
     [freetype]="freetype2|libfreetype6-dev|freetype-devel"
@@ -149,32 +157,33 @@ declare -A PKGMAP=(
     [libnotify]="libnotify|libnotify-bin|libnotify"
     [bright]="brightnessctl|brightnessctl|brightnessctl"
     [monitor]="btop|btop|btop"
-    [fetch]="fastfetch|fastfetch|fastfetch"
+    [fetch]="fastfetch||fastfetch" # Debian lama tanpa paket resmi -> ensure_fastfetch() (.deb upstream)
     [calendar]="khal|khal|khal"
     [ocr]="tesseract|tesseract-ocr|tesseract"
     [mixer]="wireplumber|wireplumber|wireplumber"
     [powerprof]="power-profiles-daemon|power-profiles-daemon|power-profiles-daemon"
     [netcli]="networkmanager|network-manager|NetworkManager"
     [bluetooth]="bluez-utils|bluez|bluez"
-    [sqlite]="sqlite3|sqlite3|sqlite"
     [git]="git|git|git"
     [curl]="curl|curl|curl"
-    [unzip]="unzip|unzip|unzip"
     [vcsbuild]="base-devel|build-essential|@development-tools"
 )
 
-pkg_for() { # $1=kunci -> nama paket distro aktif (kolom 1/2/3)
-    local idx=1
-    [[ "$DISTRO" == "debian" ]] && idx=2
-    [[ "$DISTRO" == "fedora" ]] && idx=3
-    echo "${PKGMAP[$1]}" | cut -d'|' -f"$idx"
+pkg_for() { # $1=kunci -> nama paket distro aktif (tanpa fork cut)
+    local map="${PKGMAP[$1]}"
+    local first="${map%%|*}" rest="${map#*|}"
+    local second="${rest%%|*}" third="${rest#*|}"
+    case "$DISTRO" in
+        debian) printf '%s' "$second" ;;
+        fedora) printf '%s' "$third" ;;
+        *)      printf '%s' "$first" ;;
+    esac
 }
 
 detect_distro() {
+    UPDATE2=()
     if [[ -f /etc/arch-release ]] || command -v pacman >/dev/null; then
         DISTRO="arch"; UPDATE=(pacman -Syu --noconfirm); INSTALL=(pacman -S --needed --noconfirm)
-    elif command -v apt-get >/dev/null && [[ -f /etc/debian_version ]]; then
-        DISTRO="debian"; UPDATE=(apt-get update); UPDATE2=(apt-get upgrade -y); INSTALL=(apt-get install -y)
     elif command -v apt-get >/dev/null; then
         DISTRO="debian"; UPDATE=(apt-get update); UPDATE2=(apt-get upgrade -y); INSTALL=(apt-get install -y)
     elif command -v dnf >/dev/null; then
@@ -191,16 +200,19 @@ confirm() {
         return 0
     fi
     # Via pipe, stdin adalah scriptnya sendiri: read akan menelan baris
-    # script. Mode pipe berarti pengguna sudah sadar mem-pipe installer ke
-    # sudo bash, jadi lanjut otomatis (setara --yes).
+    # script, jadi tidak aman bertanya. Mode pipe wajib --yes eksplisit
+    # agar tak ada sistem yang terinstalasi tanpa persetujuan sadar.
+    if [[ ! -t 0 && "$ASSUME_YES" -eq 0 ]]; then
+        die "mode pipe butuh --yes eksplisit: curl ... | sudo bash -s -- --yes"
+    fi
     if [[ ! -t 0 ]]; then
-        log "mode pipe tanpa TTY: lanjut otomatis"
+        log "mode pipe + --yes: lanjut otomatis"
         return 0
     fi
     echo "Ringkasan: instal OXWM (build dari source) + aplikasi pendukung + dotfiles standar (topbar, keybind, 3 tema, dmenu/dunst bertema; tema: $THEME) di $DISTRO. Tanpa display manager (autologin tty1 + startx)."
     read -rp "Lanjut? [y/N] " jawab
-    [[ "$jawab" == "y" || "$jawab" == "Y" ]] || { log_db "konfirmasi" "dibatalkan" "pengguna menjawab tidak"; die "dibatalkan pengguna"; }
-    log_db "konfirmasi" "ok" "pengguna menyetujui"
+    [[ "$jawab" == "y" || "$jawab" == "Y" ]] || { tahap "konfirmasi" "dibatalkan" "pengguna menjawab tidak"; die "dibatalkan pengguna"; }
+    tahap "konfirmasi" "ok" "pengguna menyetujui"
 }
 
 run_or_dry() { # "$@" = perintah; dry-run hanya mencetak
@@ -215,27 +227,33 @@ run_or_dry() { # "$@" = perintah; dry-run hanya mencetak
 retry() { # $1=maksimal coba, sisanya perintah; mirror kadang tersendat
     local maks=$1; shift
     local coba=1
-    until "$@"; do
-        (( coba++ >= maks )) && return 1
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+        if [[ "$coba" -ge "$maks" ]]; then
+            return 1
+        fi
         log "percobaan $coba/$maks gagal, ulangi setelah 5 dtk..."
         sleep 5
+        coba=$((coba + 1))
     done
 }
 
 system_update() {
     log "update sistem..."
-    log_db "update" "mulai" "${UPDATE[*]}"
+    tahap "update" "mulai" "${UPDATE[*]}"
     run_or_dry retry 3 "${UPDATE[@]}"
     if [[ -n "${UPDATE2[*]:-}" ]]; then
         run_or_dry retry 3 "${UPDATE2[@]}"
     fi
-    log_db "update" "ok" "sistem mutakhir"
+    tahap "update" "ok" "sistem mutakhir"
 }
 
 install_packages() {
-    local keys=(git curl unzip vcsbuild xserver xinit xsetroot zigbuild x11 xft freetype fontconfig xinerama
+    local keys=(git curl vcsbuild xserver xinit xsetroot zigbuild x11 xft freetype fontconfig xinerama
                 launcher wallpaper shot shotsel keysim fontmono fonticon notify clipboard libnotify
-                bright monitor fetch calendar ocr mixer powerprof netcli bluetooth sqlite)
+                bright monitor fetch calendar ocr mixer powerprof netcli bluetooth)
     local pkgs=()
     local k name
     for k in "${keys[@]}"; do
@@ -244,76 +262,148 @@ install_packages() {
         pkgs+=("$name")
     done
     log "instal ${#pkgs[@]} paket: ${pkgs[*]}"
-    log_db "paket" "mulai" "${pkgs[*]}"
+    tahap "paket" "mulai" "${pkgs[*]}"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati instalasi paket"
     else
         retry 3 "${INSTALL[@]}" "${pkgs[@]}"
     fi
-    log_db "paket" "ok" "selesai"
+    tahap "paket" "ok" "selesai"
 }
 
-ensure_zig() { # pastikan compiler zig ada; unduh tarball resmi bila tak tersedia
-    if command -v zig >/dev/null; then
-        log "zig sudah ada: $(zig version)"
+ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb upstream
+    command -v fastfetch >/dev/null && { log "fastfetch sudah ada"; return 0; }
+    [[ "$DISTRO" == "debian" ]] || return 0  # non-Debian sudah dipasang via paket
+    tahap "fastfetch" "mulai" "cek repo / fallback .deb upstream"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "(dry-run) lewati fastfetch (.deb upstream bila repo tak punya)"
         return 0
     fi
-    log "binari zig belum ada -> unduh tarball resmi zig $ZIG_VERSION"
-    log_db "zig" "mulai" "tarball $ZIG_VERSION"
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            log "(dry-run) lewati unduhan zig"
-        else
-            curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
-                -o /tmp/zig.tar.xz
-            rm -rf /opt/zig && mkdir -p /opt/zig
-            tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
-            ln -sf /opt/zig/zig /usr/local/bin/zig
-            rm -f /tmp/zig.tar.xz
-        fi
-        log_db "zig" "ok" "tarball terpasang"
+    if apt-cache policy fastfetch 2>/dev/null | grep -q "Candidate: (none)"; then
+        log "fastfetch tak ada di repo -> unduh .deb upstream"
+        local ver
+        ver="$(curl -fsSL https://api.github.com/repos/fastfetch-cli/fastfetch/releases/latest \
+            | grep -m1 '"tag_name"' | grep -o '[0-9][0-9.]*' | head -n1)"
+        [[ -n "$ver" ]] || die "gagal deteksi versi fastfetch terbaru"
+        local deb="/tmp/fastfetch-${ver}-linux-amd64.deb"
+        curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/download/${ver}/fastfetch-linux-amd64.deb" \
+            -o "$deb" || die "unduhan fastfetch gagal"
+        dpkg -i "$deb" || apt-get install -f -y || die "pemasangan fastfetch .deb gagal"
+        rm -f "$deb"
+    else
+        apt-get install -y fastfetch || die "pemasangan fastfetch gagal"
+    fi
+    command -v fastfetch >/dev/null || die "fastfetch tak ketemu setelah dipasang"
+    tahap "fastfetch" "ok" "terpasang"
 }
 
-install_oxwm() { # bangun dari source: seragam di semua distro
+ensure_zig() { # pastikan compiler zig ada & cukup baru; kalau tidak, unduh tarball stabil terbaru
+    if command -v zig >/dev/null; then
+        local zv
+        zv="$(zig version)"
+        if [[ "$(printf '%s\n%s\n' "$zv" "$ZIG_MIN" | sort -V | head -n1)" == "$ZIG_MIN" ]]; then
+            log "zig sudah ada & cukup baru: $zv"
+            return 0
+        fi
+        log "zig sistem terlalu tua ($zv, butuh >= $ZIG_MIN) -> unduh tarball terbaru"
+    fi
+    tahap "zig" "mulai" "tarball stabil terbaru"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "(dry-run) lewati unduhan zig"
+        return 0
+    fi
+    # Selalu ambil rilis stabil terbaru dari indeks resmi (bukan versi mati di script).
+    local idx=/tmp/zig-index.json
+    curl -fsSL "https://ziglang.org/download/index.json" -o "$idx" \
+        || die "gagal ambil indeks rilis zig"
+    local ver
+    ver="$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+":' "$idx" | tr -d '":' | sort -V | tail -n1)"
+    [[ -n "$ver" ]] || die "gagal deteksi versi zig terbaru"
+    local sum
+    sum="$(awk -v key="\"${ver}\":" 'index($0, key) {f=1} f && /x86_64-linux/ {p=1} p && /shasum/ {print; exit}' "$idx" \
+        | grep -m1 -oE '[0-9a-f]{64}')"
+    [[ -n "$sum" ]] || die "gagal baca checksum zig $ver dari indeks"
+    log "zig stabil terbaru: $ver"
+    local arsip=/tmp/zig.tar.xz
+    curl -fL "https://ziglang.org/download/${ver}/zig-x86_64-linux-${ver}.tar.xz" \
+        -o "$arsip" || die "unduhan zig gagal"
+    log "verifikasi sha256 tarball zig..."
+    echo "${sum}  ${arsip}" | sha256sum -c - \
+        || die "checksum zig tak cocok (unduhan rusak/disusupi?)"
+    rm -rf /opt/zig && mkdir -p /opt/zig
+    tar -xJf "$arsip" -C /opt/zig --strip-components=1 || die "ekstraksi zig gagal"
+    ln -sf /opt/zig/zig /usr/local/bin/zig
+    rm -f "$arsip" "$idx"
+    command -v zig >/dev/null || die "zig tak ketemu setelah dipasang"
+    log "zig terpasang: $(zig version)"
+    tahap "zig" "ok" "tarball terpasang"
+}
+
+install_oxwm() { # bangun dari source agar hasilnya sama di Arch/Fedora/Debian
     local build_dir="/tmp/oxwm-build"
+    if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/oxwm ]]; then
+        log "oxwm sudah terpasang, lewati (pakai --rebuild untuk bangun ulang)"
+        return 0
+    fi
+    # OXWM_PIN bisa ditimpa via environment: validasi sebelum dipakai di dalam
+    # `su -c "..."` (injeksi shell berjalan sebagai user target). Kosong = HEAD terbaru.
+    if [[ -n "$OXWM_PIN" ]]; then
+        [[ "$OXWM_PIN" =~ ^[0-9a-f]{40}$ ]] || die "OXWM_PIN tidak valid (harus SHA-1 40 digit heksa)"
+    fi
+    [[ "$OXWM_REPO" != *"'"* && "$build_dir" != *"'"* ]] || die "path/repo mengandung kutip tunggal"
     log "bangun & pasang OXWM dari source ($OXWM_REPO)..."
-    log_db "oxwm" "mulai" "zig build dari source"
+    tahap "oxwm" "mulai" "zig build dari source"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati clone + build oxwm"
     else
         rm -rf "$build_dir"
-        # Pin ke komit teruji agar hasil dapat diulang (HEAD yang bergeser
-        # pernah merusak build, mis. zig 0.13). Checkout sebagai pemilik repo
-        # agar tak kena dubious ownership bila SUDO_USER terlibat.
+        # Pin ke komit teruji agar hasil dapat diulang bila OXWM_PIN diisi;
+        # kosong berarti HEAD terbaru. Clone sebagai pemilik repo agar tak kena
+        # dubious ownership bila SUDO_USER terlibat.
         if [[ -n "${SUDO_USER:-}" ]]; then
-            su "$SUDO_USER" -c "git clone --depth 1 $OXWM_REPO $build_dir"
-            su "$SUDO_USER" -c "git -C $build_dir fetch --depth 1 origin $OXWM_PIN && git -C $build_dir checkout -q $OXWM_PIN"
+            su "$SUDO_USER" -c "git clone --depth 1 '$OXWM_REPO' '$build_dir'"
+            if [[ -n "$OXWM_PIN" ]]; then
+                su "$SUDO_USER" -c "git -C '$build_dir' fetch --depth 1 origin '$OXWM_PIN' && git -C '$build_dir' checkout -q '$OXWM_PIN'"
+            fi
         else
             git clone --depth 1 "$OXWM_REPO" "$build_dir"
-            git -C "$build_dir" fetch --depth 1 origin "$OXWM_PIN" && git -C "$build_dir" checkout -q "$OXWM_PIN"
+            if [[ -n "$OXWM_PIN" ]]; then
+                git -C "$build_dir" fetch --depth 1 origin "$OXWM_PIN" && git -C "$build_dir" checkout -q "$OXWM_PIN"
+            fi
         fi
-        log "oxwm dipin ke komit $OXWM_PIN"
+        if [[ -n "$OXWM_PIN" ]]; then
+            log "oxwm dipin ke komit $OXWM_PIN"
+        else
+            log "oxwm dari HEAD terbaru ($OXWM_REPO)"
+        fi
         (cd "$build_dir" && zig build -Doptimize=ReleaseSmall)
         install -m 0755 "$build_dir/zig-out/bin/oxwm" /usr/local/bin/oxwm
         rm -rf "$build_dir"
+        [[ -x /usr/local/bin/oxwm ]] || die "biner oxwm tak ketemu setelah build"
     fi
-    log_db "oxwm" "ok" "terpasang di /usr/local/bin/oxwm"
+    tahap "oxwm" "ok" "terpasang di /usr/local/bin/oxwm"
 }
 
 build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `st`
     # Repo distro tak konsisten menyediakan st (Arch bahkan tak punya), jadi
-    # bangun seragam di semua distro. Pola sed sama dengan modul Nix
+    # bangun dari source. Pola sed sama dengan modul Nix
     # (config.def.h: komentar dulu baru kembaran polosnya — urutan penting).
     local build_dir="/tmp/st-build" repo="https://git.suckless.org/st"
+    if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/st-tokyonight && -x /usr/local/bin/st-gruvbox && -x /usr/local/bin/st-catppuccin ]]; then
+        log "st 3 tema sudah terpasang, lewati (pakai --rebuild untuk bangun ulang)"
+        return 0
+    fi
+    local jobs; jobs="$(nproc 2>/dev/null || echo 1)"
     local theme fg bg cur c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
     log "bangun & pasang st 3 tema dari source ($repo)..."
-    log_db "st" "mulai" "make 3 tema"
+    tahap "st" "mulai" "make 3 tema"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati clone + build st"
         return 0
     fi
     rm -rf "$build_dir"
     if [[ -n "${SUDO_USER:-}" ]]; then
-        su "$SUDO_USER" -c "git clone --depth 1 $repo $build_dir"
+        su "$SUDO_USER" -c "git clone --depth 1 '$repo' '$build_dir'"
     else
         git clone --depth 1 "$repo" "$build_dir"
     fi
@@ -365,7 +455,7 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
                 -e "s|\"white\",|\"${c15}\",|" \
                 -e 's|static char \*font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";|static char *font = "JetBrainsMono Nerd Font:style=Regular:size=10:antialias=true:autohint=true";|' \
                 config.def.h
-            make
+            make -j"$jobs"
             install -m 0755 st "/usr/local/bin/st-${theme}"
             make clean >/dev/null 2>&1 || true
         ) || die "build st-$theme gagal"
@@ -387,12 +477,12 @@ esac
 EOF
     chmod 0755 /usr/local/bin/st
     rm -rf "$build_dir"
-    log_db "st" "ok" "st-{tokyonight,gruvbox,catppuccin} + dispatcher terpasang"
+    tahap "st" "ok" "st-{tokyonight,gruvbox,catppuccin} + dispatcher terpasang"
 }
 
 install_helpers() { # perintah pendamping (oxwm-theme, dmenu, dunst bertema) ke /usr/local/bin
     log "pasang perintah pendamping..."
-    log_db "helpers" "mulai" "bin/*"
+    tahap "helpers" "mulai" "bin/*"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) tulis /usr/local/bin dari $REPO_DIR/bin/*"
     else
@@ -402,7 +492,7 @@ install_helpers() { # perintah pendamping (oxwm-theme, dmenu, dunst bertema) ke 
             install -m 0755 "$f" "/usr/local/bin/$(basename "$f")"
         done
     fi
-    log_db "helpers" "ok" "perintah pendamping terpasang"
+    tahap "helpers" "ok" "perintah pendamping terpasang"
 }
 
 deploy_dotfiles() { # salin config standar bila pengguna belum punya
@@ -410,12 +500,18 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
     local dest_home="${TARGET_HOME:-$HOME}"
     local owner="${SUDO_USER:-$(whoami)}"
     log "deploy dotfiles $src_dir -> $dest_home"
-    log_db "dotfiles" "mulai" "$src_dir"
+    tahap "dotfiles" "mulai" "$src_dir"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati penyalinan dotfiles"
         return 0
     fi
-    local backup="$dest_home/.config-backup-$(date +%F)"
+    local backup
+    backup="$dest_home/.config-backup-$(date +%F-%H%M%S)"
+    local n=0
+    while [[ -e "$backup" ]]; do  # jalan 2x di detik yang sama pun tak menimpa
+        n=$((n + 1))
+        backup="$dest_home/.config-backup-$(date +%F-%H%M%S)-$n"
+    done
     [[ -d "$dest_home/.config" ]] && { mkdir -p "$backup"; cp -r "$dest_home/.config" "$backup/"; log "backup config lama -> $backup"; }
     mkdir -p "$dest_home/.config/oxwm"
     [[ -f "$dest_home/.config/oxwm/config.lua" ]] || cp "$src_dir/oxwm/config.lua" "$dest_home/.config/oxwm/config.lua"
@@ -441,13 +537,14 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
         log "tema yang ada dipertahankan: $(cat "$dest_home/.config/oxwm/theme")"
     fi
     chown -R "$owner:$owner" "$dest_home/.config/oxwm" "$dest_home/.xinitrc" 2>/dev/null || true
-    log_db "dotfiles" "ok" "backup: $backup"
+    tahap "dotfiles" "ok" "backup: $backup"
 }
 
 enable_services() { # tanpa display manager: autologin getty di tty1 + startx otomatis
     local owner="${SUDO_USER:-$(whoami)}"
+    valid_user "$owner" || die "nama user tidak valid: '$owner'"
     log "siapkan autologin konsol tty1 + startx otomatis untuk $owner..."
-    log_db "layanan" "mulai" "getty tty1 + startx"
+    tahap "layanan" "mulai" "getty tty1 + startx"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) tulis drop-in getty@tty1 + ~/.bash_profile + matikan DM lama"
         return 0
@@ -463,7 +560,7 @@ EOF
     systemctl daemon-reload 2>/dev/null || log "peringatan: daemon-reload gagal (lanjut tanpa reload)"
     # DM lama (bila ada) dimatikan agar tak berebut VT.
     local dm
-    for dm in lightdm gdm sddm; do
+    for dm in lightdm gdm gdm3 sddm; do
         if systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^$dm.service"; then
             systemctl disable "$dm" --now || log "peringatan: disable $dm gagal"
         fi
@@ -481,7 +578,7 @@ fi
 EOF
     fi
     chown "$owner:$owner" "$profile" 2>/dev/null || true
-    log_db "layanan" "ok" "autologin tty1 aktif"
+    tahap "layanan" "ok" "autologin tty1 aktif"
 }
 
 ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak ada
@@ -492,27 +589,28 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
     local owner="${SUDO_USER:-$(whoami)}"
     local target
     target="$(user_home "$owner")/.local/share/fonts"
-    log "font Nerd belum ada -> unduh JetBrainsMono Nerd Font ke $target"
-    log_db "font" "mulai" "JetBrainsMono.zip"
+    local arsip=/tmp/JetBrainsMono.tar.xz
+    log "font Nerd belum ada -> unduh JetBrainsMono terbaru ke $target"
+    tahap "font" "mulai" "JetBrainsMono terbaru (tar.xz)"
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "(dry-run) lewati unduhan font"
     else
         mkdir -p "$target"
-        curl -fL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
-            -o /tmp/JetBrainsMono.zip
-        unzip -o -q /tmp/JetBrainsMono.zip -d "$target"
-        rm -f /tmp/JetBrainsMono.zip
+        curl -fL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
+            -o "$arsip" || die "unduhan font gagal"
+        tar -xJf "$arsip" -C "$target" || die "ekstraksi font gagal"
+        rm -f "$arsip"
         fc-cache -f "$target" >/dev/null 2>&1 || true
         chown -R "$owner:$owner" "$target" 2>/dev/null || true
+        fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd" \
+            || die "font Nerd tak terdeteksi setelah dipasang"
     fi
-    log_db "font" "ok" "font Nerd terpasang"
+    tahap "font" "ok" "font Nerd terpasang"
 }
 
 finish() {
-    if [[ "$DRY_RUN" -eq 0 && -n "${RUN_ID:-}" ]]; then
-        sqlite3 "$DB_FILE" "UPDATE instalasi SET status='selesai' WHERE id=$RUN_ID;" 2>/dev/null || true
-    fi
     log "selesai. reboot: login konsol otomatis di tty1 lalu startx jalan sendiri ke OXWM."
+    log "log lengkap: $LOG_FILE"
 }
 
 main() {
@@ -520,6 +618,7 @@ main() {
         case "$1" in
             --dry-run) DRY_RUN=1; shift ;;
             --yes) ASSUME_YES=1; shift ;;
+            --rebuild) REBUILD=1; shift ;;
             --theme)
                 [[ -n "${2:-}" ]] || { echo "opsi --theme butuh nilai (tokyonight|gruvbox|catppuccin)"; exit 2; }
                 THEME="$2"; THEME_SET=1; shift 2 ;;
@@ -531,14 +630,16 @@ main() {
         tokyonight|gruvbox|catppuccin) ;;
         *) echo "tema tidak dikenal: $THEME (pilih: tokyonight|gruvbox|catppuccin)"; exit 2 ;;
     esac
+    init_log
+    log "========== oxwm-installer mulai (dry-run=$DRY_RUN) =========="
     check_root
     detect_distro
-    db_init || true
-    log_db "mulai" "ok" "instalasi OXWM dimulai (distro=$DISTRO dry-run=$DRY_RUN)"
+    tahap "mulai" "ok" "instalasi OXWM dimulai (distro=$DISTRO dry-run=$DRY_RUN)"
     confirm
     resolve_repo_dir
     system_update
     install_packages
+    ensure_fastfetch
     ensure_zig
     ensure_nerdfont
     install_oxwm

@@ -1,12 +1,12 @@
 # Debian/Ubuntu (apt). zig tidak ada di repo -> tarball resmi via ensure_zig().
-git curl unzip build-essential
+# fastfetch tidak ada di rilis lama -> .deb upstream via ensure_fastfetch().
+git curl build-essential
 xorg xinit x11-xserver-utils
 libx11-dev libxft-dev libfreetype6-dev libfontconfig1-dev libxinerama-dev
 dmenu feh maim slop xdotool
 fonts-jetbrains-mono fonts-font-awesome
-dunst xclip libnotify-bin brightnessctl btop fastfetch khal tesseract-ocr
+dunst xclip libnotify-bin brightnessctl btop khal tesseract-ocr
 power-profiles-daemon network-manager bluez
-sqlite3
 # OXWM: dibangun dari source (https://github.com/tonybanters/oxwm)
 # Font Nerd (ikon topbar) dipastikan via unduhan bila tak ada di sistem.
 # Opsional: clipmenu (manual), bluetui/wiremix (cargo), yazi.
