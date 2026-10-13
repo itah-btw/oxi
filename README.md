@@ -1,8 +1,8 @@
 # oxwm-installer
 
-Script instalasi otomatis window manager **OXWM**, **distro-agnostic** — cukup satu perintah, desktop siap pakai. Terinspirasi installer komunitas seperti DankLinux.
+Script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, dan Debian/Ubuntu** — cukup satu perintah, desktop siap pakai.
 
-OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — script membangunnya dari source sehingga seragam di semua distro.
+OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — script membangunnya dari source.
 
 ## Distro yang didukung
 
