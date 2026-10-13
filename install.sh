@@ -652,6 +652,7 @@ main() {
 
 # Guard ini memungkinkan unit-test: source file ini tanpa argumen
 # menjalankan fungsi-fungsinya tanpa mengeksekusi instalasi.
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# ${..:-} karena BASH_SOURCE kosong saat script masuk via pipe (set -u!).
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
     main "$@"
 fi
