@@ -581,12 +581,23 @@ EOF
     tahap "layanan" "ok" "autologin tty1 aktif"
 }
 
+nerd_terpasang() { # $1=owner -> 0 bila fc-list user itu melihat JetBrainsMono Nerd
+    # HARUS dalam konteks owner: fc-list root tak memindai ~/.local/share/fonts user.
+    # Tanpa su bila owner == user aktif (agar dry-run non-root tak meminta password).
+    if [[ "$1" == "$(whoami)" ]]; then
+        fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"
+    else
+        su "$1" -c "fc-list" 2>/dev/null | grep -qi "JetBrainsMono Nerd"
+    fi
+}
+
 ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak ada
-    if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
+    local owner="${SUDO_USER:-$(whoami)}"
+    valid_user "$owner" || die "nama user tidak valid: '$owner'"
+    if nerd_terpasang "$owner"; then
         log "font JetBrainsMono Nerd sudah ada"
         return 0
     fi
-    local owner="${SUDO_USER:-$(whoami)}"
     local target
     target="$(user_home "$owner")/.local/share/fonts"
     local arsip=/tmp/JetBrainsMono.tar.xz
@@ -600,9 +611,10 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
             -o "$arsip" || die "unduhan font gagal"
         tar -xJf "$arsip" -C "$target" || die "ekstraksi font gagal"
         rm -f "$arsip"
+        compgen -G "$target/*.ttf" >/dev/null || die "tak ada .ttf di $target setelah ekstraksi"
         fc-cache -f "$target" >/dev/null 2>&1 || true
         chown -R "$owner:$owner" "$target" 2>/dev/null || true
-        fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd" \
+        nerd_terpasang "$owner" \
             || die "font Nerd tak terdeteksi setelah dipasang"
     fi
     tahap "font" "ok" "font Nerd terpasang"
