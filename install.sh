@@ -279,13 +279,19 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
         log "(dry-run) lewati fastfetch (.deb upstream bila repo tak punya)"
         return 0
     fi
-    if apt-cache policy fastfetch 2>/dev/null | grep -q "Candidate: (none)"; then
+    # Tampung dulu stdout-nya: grep -q langsung di pipa rawan SIGPIPE
+    # (penulis mati lebih dulu -> pipefail gagal -> cabang salah).
+    local policy ver api deb
+    policy="$(apt-cache policy fastfetch 2>/dev/null)" || die "gagal baca info paket fastfetch"
+    if grep -q "Candidate: (none)" <<<"$policy"; then
         log "fastfetch tak ada di repo -> unduh .deb upstream"
-        local ver
-        ver="$(curl -fsSL https://api.github.com/repos/fastfetch-cli/fastfetch/releases/latest \
-            | grep -m1 '"tag_name"' | grep -o '[0-9][0-9.]*' | head -n1)"
+        api=/tmp/fastfetch-release.json
+        curl -fsSL https://api.github.com/repos/fastfetch-cli/fastfetch/releases/latest \
+            -o "$api" || die "gagal ambil info rilis fastfetch"
+        ver="$(grep -m1 '"tag_name"' "$api" | grep -o -m1 '[0-9][0-9.]*')"
+        rm -f "$api"
         [[ -n "$ver" ]] || die "gagal deteksi versi fastfetch terbaru"
-        local deb="/tmp/fastfetch-${ver}-linux-amd64.deb"
+        deb="/tmp/fastfetch-${ver}-linux-amd64.deb"
         curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/download/${ver}/fastfetch-linux-amd64.deb" \
             -o "$deb" || die "unduhan fastfetch gagal"
         dpkg -i "$deb" || apt-get install -f -y || die "pemasangan fastfetch .deb gagal"
@@ -558,10 +564,12 @@ EOF
     # daemon-reload bisa gagal di lingkungan tanpa systemd aktif (container/
     # chroot); unit drop-in sudah tertulis, reload menyusul saat boot.
     systemctl daemon-reload 2>/dev/null || log "peringatan: daemon-reload gagal (lanjut tanpa reload)"
-    # DM lama (bila ada) dimatikan agar tak berebut VT.
-    local dm
+    # DM lama (bila ada) dimatikan agar tak berebut VT. Tampung dulu:
+    # grep -q langsung di pipa rawan SIGPIPE (daftar unit panjang).
+    local dm units
+    units="$(systemctl list-unit-files --no-legend 2>/dev/null)" || units=""
     for dm in lightdm gdm gdm3 sddm; do
-        if systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^$dm.service"; then
+        if grep -q "^$dm.service" <<<"$units"; then
             systemctl disable "$dm" --now || log "peringatan: disable $dm gagal"
         fi
     done
@@ -584,11 +592,15 @@ EOF
 nerd_terpasang() { # $1=owner -> 0 bila fc-list user itu melihat JetBrainsMono Nerd
     # HARUS dalam konteks owner: fc-list root tak memindai ~/.local/share/fonts user.
     # Tanpa su bila owner == user aktif (agar dry-run non-root tak meminta password).
+    # Pakai hitungan (-c), BUKAN -q: grep -q keluar lebih awal -> penulis kena
+    # SIGPIPE -> pipefail menandakan gagal walau font sebenarnya ada!
+    local n=0
     if [[ "$1" == "$(whoami)" ]]; then
-        fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"
+        n="$(fc-list 2>/dev/null | grep -ci "JetBrainsMono Nerd")" || true
     else
-        su "$1" -c "fc-list" 2>/dev/null | grep -qi "JetBrainsMono Nerd"
+        n="$(su "$1" -c "fc-list" 2>/dev/null | grep -ci "JetBrainsMono Nerd")" || true
     fi
+    [[ "${n:-0}" -gt 0 ]]
 }
 
 ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak ada
