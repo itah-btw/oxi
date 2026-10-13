@@ -96,9 +96,10 @@ usage() {
 Pakai: sudo ./install.sh [OPSI]
 
 Satu baris (butuh curl; tanpa klon dulu; mode pipe wajib --yes eksplisit):
-  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --yes
-  curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox --yes
-  (cermin jsDelivr dari repo yang sama; URL mentah GitHub juga bisa dipakai)
+  curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --yes
+  curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --theme gruvbox --yes
+  (langsung dari GitHub agar selalu versi terbaru; cermin jsDelivr bisa basi:
+   https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh)
   Cabang lain: OXWM_REF=dev ... | sudo bash -s -- --theme gruvbox
 
 Distro didukung: Arch Linux, Debian/Ubuntu, Fedora (terdeteksi otomatis).

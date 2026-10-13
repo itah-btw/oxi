@@ -41,9 +41,11 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 Satu baris (butuh `curl`; tanpa klon dulu; mode pipe wajib `--yes`):
 
 ```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --yes
-curl -fsSL https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh | sudo bash -s -- --theme gruvbox --yes
+curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --theme gruvbox --yes
 ```
+
+(Langsung dari GitHub agar selalu versi terbaru. Cermin jsDelivr bisa basi, hanya bila perlu: `https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh`)
 
 Atau cara klasik:
 
