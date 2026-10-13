@@ -4,6 +4,14 @@ Script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, da
 
 OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — script membangunnya dari source.
 
+## Cuplikan
+
+![OXWM di Fedora (wallpaper)](screenshots/oxwm-fedora-wallpaper.png)
+
+![OXWM tag 2](screenshots/oxwm-test-tag2-1.png)
+
+![OXWM tag 2 (varian)](screenshots/oxwm-test-tag2-2.png)
+
 ## Distro yang didukung
 
 | Distro | Package manager | Catatan |
