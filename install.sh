@@ -24,7 +24,7 @@ REBUILD=0
 LATEST=0            # --latest: OXWM dari HEAD terbaru (default: pin teruji)
 NO_UPDATE=0         # --no-update: lewati upgrade sistem
 UNINSTALL=0         # --uninstall: hapus yang dipasang installer
-SELF_UPDATE=0       # --self-update: bangun ulang hanya komponen basi (oxu)
+SELF_UPDATE=0       # --self-update: bangun ulang hanya komponen usang (oxu)
 CHECK_ONLY=0        # --check: laporkan versi komponen, tanpa mengubah apa pun
 SESSION_REQ="auto"  # auto|autologin|manual|dm:NAMA
 SESSION_SET=0       # 1 bila sesi ditentukan via flag
@@ -166,7 +166,7 @@ tokyonight/gruvbox/catppuccin semuanya terinstal, tinggal ganti kapan saja
 dengan `oxwm-theme` setelah login):
   curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash
 
-  (langsung dari GitHub agar selalu versi terbaru; cermin jsDelivr bisa basi:
+  (langsung dari GitHub agar selalu versi terbaru; cermin jsDelivr bisa usang:
    https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh)
   Cabang lain: curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/dev/install.sh | sudo bash
 
@@ -186,7 +186,7 @@ sesi; bila tidak ada DM maka autologin getty di tty1 + startx otomatis.
   --no-update lewati upgrade sistem (langsung instal paket)
   --uninstall hapus biner + sesi buatan installer (dotfiles dibiarkan)
   --self-update
-              bangun ulang hanya komponen yang basi (perintah: oxu).
+              bangun ulang hanya komponen yang usang (perintah: oxu).
               Tanpa upgrade sistem/paket dan tanpa utak-atik sesi
   --check     laporkan versi komponen vs pin/HEAD, tanpa mengubah apa pun
   --session auto|autologin
@@ -214,7 +214,7 @@ Contoh:
   sudo ./install.sh        # instalasi penuh (semua tema ikut)
   sudo ./install.sh --no-update --yes  # tanpa upgrade sistem
   sudo ./install.sh --uninstall --yes  # hapus instalasi
-  oxu                    # perbarui komponen yang basi (butuh instal ulang sekali agar oxu ada)
+  oxu                    # perbarui komponen yang usang (butuh instal ulang sekali agar oxu ada)
   oxu --check            # cek saja, tanpa root pun bisa
   oxwm-theme gruvbox       # ganti tema kapan saja, tanpa instal ulang
 EOF
@@ -419,7 +419,7 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
             log "fastfetch $inst >= pin $FASTFETCH_VERSION (repo), dibiarkan"
             return 0
         fi
-        log "fastfetch ${inst:-tak-dikenal} basi -> .deb pin $FASTFETCH_VERSION"
+        log "fastfetch ${inst:-tak-dikenal} usang -> .deb pin $FASTFETCH_VERSION"
     fi
     tahap "fastfetch" "mulai" "cek repo / fallback .deb upstream"
     if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -1270,7 +1270,7 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
 
 # --- Pembaruan mandiri (oxu / oxwm-update) ---
 # Installer mengingat versi terpasang di state dir; update = bandingkan
-# dengan pin/HEAD terbaru, bangun ulang hanya yang basi.
+# dengan pin/HEAD terbaru, bangun ulang hanya yang usang.
 state_dir() { printf '%s' "${OXWM_STATE_DIR:-/var/lib/oxwm-installer}"; }
 record_state() { # $1=nama $2=nilai — catat versi terpasang (lewati saat dry-run)
     [[ "$DRY_RUN" -eq 1 ]] && return 0
@@ -1294,13 +1294,13 @@ report_line() { # $1=nama $2=terpasang $3=tersedia -> "nama|a|b|status"
     elif staleness "$2" "$3"; then
         printf '%s|%s|%s|mutakhir\n' "$1" "$2" "$3"
     else
-        printf '%s|%s|%s|basi\n' "$1" "$2" "$3"
+        printf '%s|%s|%s|usang\n' "$1" "$2" "$3"
     fi
 }
-update_needed() { # $1=nama $2=laporan check_updates -> 0 bila basi/tak-diketahui
+update_needed() { # $1=nama $2=laporan check_updates -> 0 bila usang/tak-diketahui
     local st
     st="$(awk -F'|' -v n="$1" '$1==n{print $4}' <<<"$2")"
-    [[ "$st" == "basi" || "$st" == "tak-diketahui" ]]
+    [[ "$st" == "usang" || "$st" == "tak-diketahui" ]]
 }
 upstream_head() { # $1=url repo git -> SHA HEAD atau "" (butuh git + jaringan)
     git ls-remote "$1" HEAD 2>/dev/null | awk '{print $1}'
@@ -1341,7 +1341,7 @@ print_updates() { # $1=laporan -> baris manusiawi "nama: status (a -> b)"
     done <<<"$1"
     return 0
 }
-do_self_update() { # bangun ulang hanya komponen basi (state vs pin/HEAD)
+do_self_update() { # bangun ulang hanya komponen usang (state vs pin/HEAD)
     log "cek pembaruan komponen..."
     tahap "self-update" "mulai" "cek"
     local report n_tindakan=0
@@ -1350,7 +1350,7 @@ do_self_update() { # bangun ulang hanya komponen basi (state vs pin/HEAD)
     local name _a _b st
     while IFS='|' read -r name _a _b st; do
         [[ -n "$name" ]] || continue
-        if [[ "$st" == "basi" || "$st" == "tak-diketahui" ]]; then
+        if [[ "$st" == "usang" || "$st" == "tak-diketahui" ]]; then
             n_tindakan=$((n_tindakan + 1))
         fi
     done <<<"$report"
@@ -1361,7 +1361,7 @@ do_self_update() { # bangun ulang hanya komponen basi (state vs pin/HEAD)
     fi
     if [[ "$DRY_RUN" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then
         if [[ ! -t 0 ]]; then
-            echo "Ringkasan: $n_tindakan komponen basi/tak-dikenal, bangun ulang yang itu saja." >&2
+            echo "Ringkasan: $n_tindakan komponen usang/tak-dikenal, bangun ulang yang itu saja." >&2
             pipe_grace
         else
             echo "$report" | print_updates
