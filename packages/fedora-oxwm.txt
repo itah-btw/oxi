@@ -6,7 +6,7 @@ dmenu feh maim slop xdotool
 jetbrains-mono-fonts fontawesome-fonts
 dunst xclip libnotify brightnessctl btop fastfetch khal tesseract
 power-profiles-daemon NetworkManager bluez
-pipewire wireplumber playerctl
+pipewire wireplumber pipewire-pulseaudio pipewire-alsa playerctl
 # OXWM: dibangun dari source (https://github.com/tonybanters/oxwm)
 # Font Nerd (ikon topbar) dipastikan via unduhan bila tak ada di sistem.
 # Opsional: clipmenu (manual), bluetui/wiremix (cargo), yazi.

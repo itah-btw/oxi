@@ -25,7 +25,9 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 - Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
 - OXWM dibangun dari source komit teruji yang di-pin (`472c7675`; `--latest` untuk HEAD), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
 - Terminal `st` (bawaan: build 3 tema + dispatcher, ikut `oxt`) atau `alacritty`/`kitty`/`ghostty` dari repo — ketiganya ikut `oxt` via templat warna per tema
-- Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
+- Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Audio PipeWire lengkap
+(pipewire + wireplumber + pipewire-pulse/pipewire-alsa agar aplikasi
+PulseAudio/ALSA bersuara; socket user di-enable, grup audio ditambahkan). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
 - Sesi OXWM: bila display manager terdeteksi (lightdm/gdm/sddm/lxdm/slim/xdm/ly/greetd/dll) maka DM dipakai + OXWM didaftarkan di `/usr/share/xsessions/oxwm.desktop`; bila tidak ada DM maka autologin getty di tty1 + `startx` otomatis
 - Dotfiles: `~/.config/oxwm/` (config + topbar, keybind, palet + wallpaper 3 tema, dunst bertema, skrip status cpu/temp/wifi/bt) + `~/.config/khal/` + `~/.xinitrc` (config lama dibackup)
 - Log instalasi: `/var/log/oxwm-installer/install.log` (fallback `./install.log` bila direktori itu tak bisa ditulis)
@@ -38,7 +40,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 ## Cara penggunaan
 
-Satu baris — cukup ini saja (semua tema ikut terpasang):
+Copy perintah di bawah ini, paste ke terminal, lalu Enter:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash

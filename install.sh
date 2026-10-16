@@ -260,6 +260,8 @@ declare -A PKGMAP=(
     [ocr]="tesseract|tesseract-ocr|tesseract"
     [mixer]="wireplumber|wireplumber|wireplumber"
     [audio]="pipewire|pipewire|pipewire"
+    [pulse]="pipewire-pulse|pipewire-pulse|pipewire-pulseaudio"
+    [alsacompat]="pipewire-alsa|pipewire-alsa|pipewire-alsa"
     [powerprof]="power-profiles-daemon|power-profiles-daemon|power-profiles-daemon"
     [netcli]="networkmanager|network-manager|NetworkManager"
     [bluetooth]="bluez-utils|bluez|bluez"
@@ -378,7 +380,7 @@ system_update() {
 install_packages() {
     local keys=(git curl vcsbuild xserver xinit xsetroot zigbuild x11 xft freetype fontconfig xinerama
                 launcher wallpaper shot shotsel keysim fontmono fonticon notify clipboard libnotify
-                bright monitor fetch calendar ocr mixer audio powerprof netcli bluetooth mediakeys)
+                bright monitor fetch calendar ocr mixer audio pulse alsacompat powerprof netcli bluetooth mediakeys)
     local pkgs=()
     local k name
     for k in "${keys[@]}"; do
