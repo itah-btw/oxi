@@ -17,7 +17,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 | Distro | Package manager | Catatan |
 |---|---|---|
 | Arch Linux | pacman | Semua dependensi dari repo resmi |
-| Debian / Ubuntu | apt | `zig` tidak ada di repo → tarball 0.16.x otomatis (seri yang didukung oxwm); `fastfetch` di rilis lama → `.deb` upstream |
+| Debian / Ubuntu | apt | `zig` tidak ada di repo -> tarball 0.16.x otomatis (seri yang didukung oxwm); `fastfetch` di rilis lama -> `.deb` upstream |
 | Fedora | dnf | Semua dependensi dari repo resmi |
 
 ## Yang dipasang script ini
@@ -63,7 +63,7 @@ chmod +x install.sh
 sudo ./install.sh
 
 # 3. Reboot: pilih sesi OXWM di display manager (bila ada), atau
-#    login konsol otomatis di tty1 → startx jalan sendiri (bila tanpa DM)
+#    login konsol otomatis di tty1 -> startx jalan sendiri (bila tanpa DM)
 sudo reboot
 ```
 
@@ -86,9 +86,9 @@ OXWM dibangun dari komit teruji yang di-pin (`472c7675`, reproduksibel);
 `--latest` atau `OXWM_PIN=""` untuk HEAD terbaru, `OXWM_PIN=<40-heksa>`
 untuk komit lain.
 
-Sesi otomatis: ada DM → pakai DM (entri `OXWM` muncul di menu sesi;
+Sesi otomatis: ada DM -> pakai DM (entri `OXWM` muncul di menu sesi;
 autologin buatan installer yang lama dibersihkan agar tak berebut VT).
-Tanpa DM → login konsol otomatis di tty1, lalu `startx` jalan sendiri
+Tanpa DM -> login konsol otomatis di tty1, lalu `startx` jalan sendiri
 memakai `~/.xinitrc`. TTY lain tetap login manual biasa. Pindah
 belakangan (pasang/copot DM) cukup jalankan ulang installer: ia beralih
 sendiri antara mode DM dan autologin.
@@ -162,11 +162,11 @@ lalu me-reload oxwm (reload manual dengan `Super+Shift+R` bila tak ada X).
 
 ## Troubleshooting
 
-- **"jalankan dengan sudo"** → pakai `sudo ./install.sh`, bukan sebagai root langsung.
-- **"distro tidak didukung"** → butuh Arch Linux, Debian/Ubuntu, atau Fedora.
-- **Gagal di satu paket** → baca pesan error + log (`/var/log/oxwm-installer/install.log`), perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten; `--rebuild` bila ingin bangun ulang dari source).
-- **Config lama** → tersimpan di `~/.config-backup-TANGGAL-JAM/`, tinggal kembalikan manual.
-- **Cek riwayat tahap** → `grep '\[.*\]' /var/log/oxwm-installer/install.log`.
+- **"jalankan dengan sudo"** -> pakai `sudo ./install.sh`, bukan sebagai root langsung.
+- **"distro tidak didukung"** -> butuh Arch Linux, Debian/Ubuntu, atau Fedora.
+- **Gagal di satu paket** -> baca pesan error + log (`/var/log/oxwm-installer/install.log`), perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten; `--rebuild` bila ingin bangun ulang dari source).
+- **Config lama** -> tersimpan di `~/.config-backup-TANGGAL-JAM/`, tinggal kembalikan manual.
+- **Cek riwayat tahap** -> `grep '\[.*\]' /var/log/oxwm-installer/install.log`.
 
 ## Struktur repo
 
