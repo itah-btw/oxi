@@ -69,6 +69,9 @@ tahap() { # $1=tahap $2=status $3=pesan — riwayat tahap ke berkas log
 }
 valid_user() { [[ "${1:-}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; } # nama user Linux yang waras
 
+# SC2120 non-isu: argumen opsional memang untuk unit-test (check_arch aarch64);
+# produksi memanggil tanpa argumen (-> uname).
+# shellcheck disable=SC2120
 check_arch() { # [$1=arsitektur, default uname] — tarball zig + .deb fastfetch hanya x86_64
     local a="${1:-$(uname -m)}"
     if [[ "$a" != "x86_64" && -z "${OXWM_ALLOW_ARCH:-}" ]]; then
@@ -916,6 +919,9 @@ dm_from_units() { # $1=teks `systemctl list-unit-files` -> nama DM atau "" (murn
     return 0
 }
 
+# SC2120 non-isu: argumen opsional memang untuk unit-test (path palsu);
+# produksi memanggil tanpa argumen (-> path sistem).
+# shellcheck disable=SC2120
 dm_from_symlink() { # [$1=path display-manager.service] -> nama DM atau "" (tak pernah gagal)
     local link="${1:-/etc/systemd/system/display-manager.service}" target base cand
     [[ -L "$link" ]] || return 0
