@@ -127,6 +127,10 @@ oxu --check    # cek saja (tanpa root pun bisa)
 membandingkan dengan catatan versi di `/var/lib/oxwm-installer/`
 (komit oxwm/st, versi zig/font/fastfetch). Paket repo (`dmenu`, `btop`,
 `fastfetch` Debian baru, dst.) tetap urusan `pacman -Syu`/`apt upgrade`.
+Bila `fastfetch` atau `zig` hilang, `oxu` memasangnya kembali (fastfetch
+dari repo, zig dari tarball pin bila serinya tak cocok); `--check` butuh
+jaringan untuk membandingkan dengan upstream. `--uninstall` ikut
+membuang biner `oxu` + state ini.
 Jalankan sekali `sudo ./install.sh` (atau reinstall) agar perintah `oxu`
 terpasang di `/usr/local/bin`.
 
@@ -134,7 +138,7 @@ terpasang di `/usr/local/bin`.
 
 | Tombol | Aksi |
 |---|---|
-| Super + Enter | Buka terminal (st) |
+| Super + Enter | Buka terminal (bawaan `st`; ikut pilihan `--terminal`) |
 | Super + D | Launcher (dmenu bertema) |
 | Super + V | Riwayat clipboard (butuh `clipmenud` jalan) |
 | Super + Y | Kalender (`ikhal`) |
@@ -172,9 +176,10 @@ lalu me-reload oxwm (reload manual dengan `Super+Shift+R` bila tak ada X).
 
 ```
 oxwm-installer/
-├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--latest/--no-update/--uninstall/--theme/--force-autologin/--no-autologin)
+├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--latest/--uninstall/--self-update/--check/--terminal/--dm/--session/dll - lihat --help)
 ├── bin/oxt                        # perintah ganti tema (terpasang ke /usr/local/bin)
-├── bin/oxt                  # alias ke oxt
+├── bin/oxwm-theme                  # alias ke oxt
+├── bin/oxu, bin/oxwm-update        # perintah pembaruan mandiri (terpasang ke /usr/local/bin)
 ├── bin/dmenu_run, bin/dmenu-themed # dmenu bertema (terpasang ke /usr/local/bin)
 ├── bin/dunst                       # dunst bertema (terpasang ke /usr/local/bin)
 ├── dotfiles/oxwm/config.lua         # config OXWM: topbar, keybind (baca ~/.config/oxwm/theme)
@@ -183,13 +188,14 @@ oxwm-installer/
 ├── dotfiles/oxwm/dunstrc-*          # config dunst per tema
 ├── dotfiles/oxwm/*-status.sh        # skrip blok topbar (cpu/temp/wifi/bt/vol/mic/bright)
 ├── dotfiles/oxwm/theme              # tema bawaan (tokyonight)
+├── dotfiles/{alacritty,kitty,ghostty}/ # templat warna terminal per tema (dipakai oxt)
 ├── dotfiles/khal/config             # kalender lokal minimal (ikhal)
 ├── dotfiles/fastfetch/config.jsonc  # config fastfetch
 ├── dotfiles/xinitrc                 # dipakai startx
 ├── packages/{arch,debian,fedora}-oxwm.txt  # daftar paket
 ├── screenshots/                     # cuplikan layar untuk README
 ├── tests/smoke.sh                   # uji asap (sintaks + fungsi murni)
-├── .github/workflows/ci.yml         # CI: shellcheck + uji asap
+├── .github/workflows/ci.yml         # CI: shellcheck + uji asap + dry-run alur utama
 └── README.md
 ```
 
