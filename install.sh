@@ -415,7 +415,7 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
             log "fastfetch $inst >= pin $FASTFETCH_VERSION (repo), dibiarkan"
             return 0
         fi
-        log "fastfetch ${inst:-tak-dikenal} outdated -> .deb pin $FASTFETCH_VERSION"
+        log "fastfetch ${inst:-tak-dikenal} < pin $FASTFETCH_VERSION -> cek repo"
     fi
     tahap "fastfetch" "mulai" "cek repo / fallback .deb upstream"
     if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -424,7 +424,7 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
     fi
     # Tampung dulu stdout-nya: grep -q langsung di pipa rawan SIGPIPE
     # (penulis mati lebih dulu -> pipefail gagal -> cabang salah).
-    local tmp deb policy
+    local tmp deb policy now
     tmp="$(new_tmpdir)"
     policy="$(apt-cache policy fastfetch 2>/dev/null)" || die "gagal baca info paket fastfetch"
     if grep -q "Candidate: (none)" <<<"$policy"; then
@@ -441,6 +441,8 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
     else
         apt-get install -y fastfetch || die "pemasangan fastfetch gagal"
         rm -f "$(state_dir)/fastfetch.version" 2>/dev/null || true # kini milik repo
+        now="$(dpkg-query -W -f='${Version}' fastfetch 2>/dev/null)" || now=""
+        log "fastfetch ikut repo sistem (${now:-terpasang}); pin hanya untuk repo tanpa paket"
     fi
     command -v fastfetch >/dev/null || die "fastfetch tak ketemu setelah dipasang"
     tahap "fastfetch" "ok" "terpasang"
