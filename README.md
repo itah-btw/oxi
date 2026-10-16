@@ -76,7 +76,7 @@ sudo ./install.sh --yes        # lewati konfirmasi (opsional; otomatis di mode p
 sudo ./install.sh --rebuild    # bangun ulang oxwm + st walau sudah ada
 sudo ./install.sh --no-update --yes  # lewati upgrade sistem
 sudo ./install.sh --latest --yes     # oxwm dari HEAD terbaru (default: pin teruji)
-sudo ./install.sh --uninstall --yes  # hapus biner + sesi (dotfiles dibiarkan)
+sudo ./install.sh --uninstall --yes  # hapus biner + oxu + sesi (dotfiles dibiarkan)
 sudo ./install.sh --theme g --yes           # opsional: tema aktif awal (t/g/c)
 sudo ./install.sh --force-autologin  # paksa autologin tty1 walau ada DM
 sudo ./install.sh --no-autologin     # jangan sentuh getty/startx (login manual)

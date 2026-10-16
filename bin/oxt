@@ -29,7 +29,7 @@ echo "$theme" > "$THEME_DIR/theme"
 
 # Terminal repo (alacritty/kitty/ghostty) ikut tema: salin config tema aktif
 # ke path live-nya. st tak perlu apa-apa (dispatcher + reload oxwm cukup).
-term="$(tr -d '[:space:]' < /var/lib/oxwm-installer/terminal 2>/dev/null || echo st)"
+term="$(tr -d '[:space:]' < "${OXWM_STATE_DIR:-/var/lib/oxwm-installer}/terminal" 2>/dev/null || echo st)"
 case "$term" in
     alacritty)
         mkdir -p "$HOME/.config/alacritty"

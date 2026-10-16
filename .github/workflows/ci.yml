@@ -13,3 +13,5 @@ jobs:
         run: shellcheck -S warning install.sh bin/* tests/*.sh
       - name: Uji asap
         run: bash tests/smoke.sh
+      - name: Uji alur utama (dry-run)
+        run: bash install.sh --dry-run --yes

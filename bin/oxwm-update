@@ -7,4 +7,5 @@ set -eu
 REPO_SLUG="${OXWM_REPO_SLUG:-itah-btw/oxwm-installer}"
 REF="${OXWM_REF:-main}"
 # shellcheck disable=SC2086
-exec curl -fsSL "https://raw.githubusercontent.com/${REPO_SLUG}/${REF}/install.sh" | sudo bash -s -- --self-update "$@"
+exec curl -fsSL --retry 3 --retry-delay 2 --proto '=https' \
+    "https://raw.githubusercontent.com/${REPO_SLUG}/${REF}/install.sh" | sudo bash -s -- --self-update "$@"

@@ -137,7 +137,8 @@ resolve_repo_dir() {
     tmp="$(mktemp -d)" || die "gagal buat direktori sementara"
     TMPDIRS+=("$tmp")
     log "unduh repo $REPO_SLUG@$REF ke $tmp..."
-    curl -fsSL "https://github.com/$REPO_SLUG/archive/refs/heads/$REF.tar.gz" -o "$tmp/repo.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 2 --proto '=https' \
+        "https://github.com/$REPO_SLUG/archive/refs/heads/$REF.tar.gz" -o "$tmp/repo.tar.gz" \
         || die "unduhan repo gagal (cek koneksi/nama cabang)"
     tar -xzf "$tmp/repo.tar.gz" -C "$tmp" \
         || die "arsip repo rusak"
@@ -180,7 +181,7 @@ sesi; bila tidak ada DM maka autologin getty di tty1 + startx otomatis.
   --latest    bangun OXWM dari HEAD terbaru. Default: pin ke komit teruji
               472c7675 (reproduksibel; timpa via OXWM_PIN=<40-heksa>/"" )
   --no-update lewati upgrade sistem (langsung instal paket)
-  --uninstall hapus biner + sesi buatan installer (dotfiles dibiarkan)
+  --uninstall hapus biner + oxu + sesi buatan installer (dotfiles dibiarkan)
   --self-update
               bangun ulang hanya komponen yang outdated (perintah: oxu).
               Tanpa upgrade sistem/paket dan tanpa utak-atik sesi
@@ -313,6 +314,8 @@ detect_distro() {
         debian) UPDATE=(apt-get update); UPDATE2=(apt-get upgrade -y); INSTALL=(apt-get install -y) ;;
         fedora) UPDATE=(dnf upgrade -y --refresh); INSTALL=(dnf install -y) ;;
     esac
+    # Cegah prompt interaktif (needrestart/confold) di tengah apt upgrade/install.
+    [[ "$DISTRO" == "debian" ]] && export DEBIAN_FRONTEND=noninteractive
     log "distro: $DISTRO"
 }
 
@@ -397,9 +400,20 @@ install_packages() {
     tahap "paket" "ok" "selesai"
 }
 
-ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb upstream
+ensure_fastfetch() { # semua distro; Debian lama tanpa paket resmi -> fallback .deb upstream
     if [[ "$DISTRO" != "debian" ]]; then
-        # Non-Debian: ranah install_packages; yang sudah ada milik repo sistem.
+        # Non-Debian: paket repo penuh. Dipasang bila hilang agar oxu bisa
+        # memperbaiki fastfetch yang terhapus (check_updates menandainya).
+        if ! command -v fastfetch >/dev/null 2>&1; then
+            tahap "fastfetch" "mulai" "instal dari repo"
+            if [[ "$DRY_RUN" -eq 1 ]]; then
+                log "(dry-run) lewati fastfetch (repo)"
+            else
+                retry 3 "${INSTALL[@]}" fastfetch || die "pemasangan fastfetch gagal"
+                command -v fastfetch >/dev/null || die "fastfetch tak ketemu setelah dipasang"
+            fi
+            tahap "fastfetch" "ok" "terpasang (repo)"
+        fi
         return 0
     fi
     if command -v fastfetch >/dev/null; then
@@ -430,7 +444,8 @@ ensure_fastfetch() { # Debian/Ubuntu lama tanpa paket fastfetch resmi -> .deb up
     if grep -q "Candidate: (none)" <<<"$policy"; then
         log "fastfetch tak ada di repo -> unduh .deb upstream $FASTFETCH_VERSION (terpin)"
         deb="$tmp/fastfetch-${FASTFETCH_VERSION}-linux-amd64.deb"
-        curl -fL "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.deb" \
+        curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+            "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.deb" \
             -o "$deb" || die "unduhan fastfetch gagal"
         log "verifikasi sha256 .deb fastfetch..."
         echo "${FASTFETCH_SHA256}  ${deb}" | sha256sum -c - \
@@ -466,7 +481,8 @@ ensure_zig() { # pastikan compiler zig seri 0.16.x ada (yang didukung oxwm); kal
     local arsip tmp
     tmp="$(new_tmpdir)"
     arsip="$tmp/zig.tar.xz"
-    curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
+    curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+        "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
         -o "$arsip" || die "unduhan zig gagal"
     log "verifikasi sha256 tarball zig..."
     echo "${ZIG_SHA256}  ${arsip}" | sha256sum -c - \
@@ -477,7 +493,6 @@ ensure_zig() { # pastikan compiler zig seri 0.16.x ada (yang didukung oxwm); kal
     rm -f "$arsip"
     command -v zig >/dev/null || die "zig tak ketemu setelah dipasang"
     log "zig terpasang: $(zig version)"
-    record_state zig.version "$(zig version)"
     tahap "zig" "ok" "tarball terpasang"
 }
 
@@ -723,6 +738,30 @@ install_helpers() { # perintah pendamping (oxwm-theme, dmenu, dunst bertema) ke 
     tahap "helpers" "ok" "perintah pendamping terpasang"
 }
 
+template_config_terminal() { # $1=config.lua $2=terminal - ganti referensi st + verifikasi keras
+    local cfg="$1" term="$2" wiremix
+    case "$term" in
+        alacritty) wiremix="alacritty --class wiremix -e wiremix" ;;
+        kitty)     wiremix="kitty --class wiremix wiremix" ;;
+        ghostty)   wiremix="ghostty --x11-instance-name=wiremix -e wiremix" ;;
+        *) die "templating terminal: terminal tak dikenal '$term'" ;;
+    esac
+    sed -i "s/^local terminal = \"st\"/local terminal = \"$term\"/" "$cfg"
+    # wiremix harus jadi instance/class "wiremix" agar rule floating kena.
+    sed -i "s/st -n wiremix -c wiremix -e wiremix/$wiremix/" "$cfg"
+    if [[ "$term" == "kitty" ]]; then
+        # kitty tak lagi punya opsi -e: program ditulis sebagai argumen posisional.
+        sed -i "s/\bst -e /kitty /g" "$cfg"
+    else
+        sed -i "s/\bst -e /$term -e /g" "$cfg"
+    fi
+    grep -q "^local terminal = \"$term\"" "$cfg" \
+        || die "templating $term: baris 'local terminal' tak terganti di $cfg"
+    if grep -qE '(^|[^[:alnum:]_-])st -' "$cfg"; then
+        die "templating $term: masih ada referensi perintah 'st' di $cfg (pola config.lua berubah?)"
+    fi
+}
+
 deploy_dotfiles() { # salin config standar bila pengguna belum punya
     local src_dir="$REPO_DIR/dotfiles"
     local dest_home="${TARGET_HOME:-$HOME}"
@@ -792,10 +831,7 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
     fi
     # Templat terminal hanya untuk config baru (config lama tak pernah ditimpa).
     if [[ "$fresh_config" -eq 1 && "$TERMINAL" != "st" ]]; then
-        local cfg="$dest_home/.config/oxwm/config.lua"
-        sed -i "s/^local terminal = \"st\"/local terminal = \"$TERMINAL\"/" "$cfg"
-        sed -i "s/\"st -e /\"$TERMINAL -e /g" "$cfg"
-        sed -i "s/st -n wiremix -c wiremix -e wiremix/$TERMINAL -e wiremix/" "$cfg"
+        template_config_terminal "$dest_home/.config/oxwm/config.lua" "$TERMINAL"
         log "config.lua ditemplat untuk terminal $TERMINAL"
     elif [[ "$fresh_config" -eq 0 && "$TERMINAL" != "st" ]]; then
         log "config lama dipertahankan (masih st); ubah manual baris 'local terminal' bila ingin $TERMINAL"
@@ -1249,7 +1285,8 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
         tmp="$(new_tmpdir)"
         arsip="$tmp/JetBrainsMono.tar.xz"
         mkdir -p "$target"
-        curl -fL "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
+        curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+            "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
             -o "$arsip" || die "unduhan font gagal"
         log "verifikasi sha256 arsip font..."
         echo "${NERDFONT_SHA256}  ${arsip}" | sha256sum -c - \
@@ -1386,8 +1423,8 @@ do_self_update() { # bangun ulang hanya komponen outdated (state vs pin/HEAD)
     fi
     update_needed nerdfont "$report" && ensure_nerdfont
     update_needed fastfetch "$report" && ensure_fastfetch
-    # zig dipastikan di dalam install_oxwm bila jalur source; helper + skrip
-    # status/dunstrc selalu disegarkan (murah dan aman).
+    update_needed zig "$report" && ensure_zig
+    # Helper + skrip status/dunstrc selalu disegarkan (murah dan aman).
     install_helpers
     deploy_dotfiles
     tahap "self-update" "ok" "$n_tindakan komponen diperbarui"
@@ -1412,14 +1449,15 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
     log "hapus instalasi OXWM..."
     tahap "uninstall" "mulai" "bersih-bersih"
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) hapus biner oxwm/st/helpers + sesi (dotfiles dibiarkan)"
+        log "(dry-run) hapus biner oxwm/st/helpers + oxu + state pembaruan + sesi (dotfiles dibiarkan)"
         return 0
     fi
     # Biner bernama unik buatan installer (tak dipakai paket distro).
     local f
     for f in /usr/local/bin/oxwm \
              /usr/local/bin/st-tokyonight /usr/local/bin/st-gruvbox /usr/local/bin/st-catppuccin \
-             /usr/local/bin/oxt /usr/local/bin/oxwm-theme /usr/local/bin/dmenu-themed; do
+             /usr/local/bin/oxt /usr/local/bin/oxu /usr/local/bin/oxwm-update \
+             /usr/local/bin/oxwm-theme /usr/local/bin/dmenu-themed; do
         run_or_dry rm -f "$f"
     done
     # Nama yang menimpa biner sistem: hanya bila wrapper buatan kita,
@@ -1434,6 +1472,8 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
     else
         log "zig dibiarkan (bukan tarball installer)"
     fi
+    # State pembaruan (dibaca oxu: commit/versi terpasang) ikut dibuang.
+    run_or_dry rm -rf "$(state_dir)"
     run_or_dry rm -f "$(xsession_file)"
     remove_autologin
     remove_startx_block "$profile"
@@ -1519,7 +1559,6 @@ main() {
     check_arch
     if [[ "$LATEST" -eq 1 ]]; then
         OXWM_PIN=""
-        log "catatan: --latest, OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
     fi
     if [[ -n "$OXWM_PIN" ]]; then
         [[ "$OXWM_PIN" =~ ^[0-9a-f]{40}$ ]] || die "OXWM_PIN tidak valid (harus SHA-1 40 digit heksa; kosongkan untuk HEAD terbaru)"
@@ -1532,6 +1571,9 @@ main() {
     init_log
     trap cleanup_tmpdirs EXIT
     log "========== oxwm-installer mulai (dry-run=$DRY_RUN) =========="
+    if [[ "$LATEST" -eq 1 ]]; then
+        log "catatan: --latest, OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
+    fi
     check_root
     if [[ "$UNINSTALL" -eq 1 ]]; then
         if [[ "$DRY_RUN" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then

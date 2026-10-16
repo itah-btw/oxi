@@ -219,9 +219,10 @@ fi
 # 19. do_uninstall(): bersih-bersih tanpa sentuh config user.
 TARGET_HOME="$T/fakehome"; mkdir -p "$TARGET_HOME"
 ensure_startx_block "$TARGET_HOME/.bash_profile"
-export OXWM_XSESSION_DIR="$T/us-xsess" OXWM_GETTY_DROPIN="$T/us-autologin.conf"
+export OXWM_XSESSION_DIR="$T/us-xsess" OXWM_GETTY_DROPIN="$T/us-autologin.conf" OXWM_STATE_DIR="$T/us-state"
 install_xsession_entry
 setup_autologin "itah" >/dev/null 2>&1
+record_state terminal "alacritty"
 do_uninstall >/dev/null 2>&1
 [[ ! -f "$T/us-xsess/oxwm.desktop" ]] \
     && ok "uninstall hapus xsessions" || ng "uninstall hapus xsessions"
@@ -229,7 +230,9 @@ do_uninstall >/dev/null 2>&1
     && ok "uninstall hapus autologin" || ng "uninstall hapus autologin"
 ! grep -q "oxwm-installer" "$TARGET_HOME/.bash_profile" \
     && ok "uninstall hapus startx" || ng "uninstall hapus startx"
-unset OXWM_XSESSION_DIR OXWM_GETTY_DROPIN TARGET_HOME
+[[ ! -d "$T/us-state" ]] \
+    && ok "uninstall hapus state oxu" || ng "uninstall hapus state oxu"
+unset OXWM_XSESSION_DIR OXWM_GETTY_DROPIN TARGET_HOME OXWM_STATE_DIR
 
 # 20. Pin upstream (#3): format versi + sha256 valid.
 [[ "$ZIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
@@ -330,6 +333,38 @@ OXWM_DM='' resolve_choices >/dev/null 2>&1
 [[ "$TERMINAL" == "st" ]] \
     && ok "terminal default st" || ng "terminal default st ($TERMINAL)"
 unset OXWM_DM; DRY_RUN=0
+
+# 25. Templating terminal: semua referensi st harus habis + gagal keras bila meleset.
+for term in alacritty kitty ghostty; do
+    cp dotfiles/oxwm/config.lua "$T/cfg-$term.lua"
+    if (template_config_terminal "$T/cfg-$term.lua" "$term") >/dev/null 2>&1; then
+        if grep -qE '(^|[^[:alnum:]_-])st -' "$T/cfg-$term.lua" \
+           || ! grep -q "^local terminal = \"$term\"" "$T/cfg-$term.lua"; then
+            ng "templating $term bersih"
+        else
+            ok "templating $term bersih"
+        fi
+    else
+        ng "templating $term jalan tanpa error"
+    fi
+done
+grep -q "alacritty --class wiremix -e wiremix" "$T/cfg-alacritty.lua" \
+    && ok "wiremix alacritty pakai --class" || ng "wiremix alacritty pakai --class"
+grep -q "kitty --class wiremix wiremix" "$T/cfg-kitty.lua" \
+    && ok "wiremix kitty posisional tanpa -e" || ng "wiremix kitty posisional tanpa -e"
+grep -q "ghostty --x11-instance-name=wiremix -e wiremix" "$T/cfg-ghostty.lua" \
+    && ok "wiremix ghostty pakai x11-instance-name" || ng "wiremix ghostty pakai x11-instance-name"
+grep -q 'XF86WLAN.*kitty nmtui' "$T/cfg-kitty.lua" \
+    && ok "keybind XF86WLAN ikut kitty" || ng "keybind XF86WLAN ikut kitty"
+! grep -q "kitty -e" "$T/cfg-kitty.lua" \
+    && ok "kitty tanpa -e di semua spawn" || ng "kitty tanpa -e di semua spawn"
+cp dotfiles/oxwm/config.lua "$T/cfg-bad.lua"
+echo 'lawas st -x tetap' >> "$T/cfg-bad.lua"
+if (template_config_terminal "$T/cfg-bad.lua" alacritty) >/dev/null 2>&1; then
+    ng "templating gagal keras bila sisa pola st"
+else
+    ok "templating gagal keras bila sisa pola st"
+fi
 
 if [[ "$fail" -eq 0 ]]; then echo "SEMUA UJI LOLOS"; else echo "ADA UJI GAGAL"; fi
 exit "$fail"
