@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# oxwm-update — perbarui komponen OXWM yang usang (bangun ulang selektif).
+# oxwm-update — perbarui komponen OXWM yang outdated (bangun ulang selektif).
 # Selalu memakai installer terbaru dari GitHub agar pin versi ikut terbaru.
 # Alias pendek: oxu. Butuh sudo + koneksi internet (cek versi ke upstream).
 # Pakai: oxu [--check] [--latest] [--yes]

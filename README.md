@@ -119,7 +119,7 @@ Selalu berdampingan dengan DE/WM yang sudah ada — tidak ada opsi hapus.
 tidak ikut. Untuk itu ada:
 
 ```bash
-oxu            # bangun ulang hanya komponen yang usang
+oxu            # bangun ulang hanya komponen yang outdated
 oxu --check    # cek saja (tanpa root pun bisa)
 ```
 

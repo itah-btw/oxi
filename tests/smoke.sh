@@ -263,13 +263,13 @@ staleness "a" "b" && ng "staleness beda" || ok "staleness beda"
 staleness "" "b" && ng "staleness kosong" || ok "staleness kosong"
 [[ "$(report_line w a a)" == "w|a|a|mutakhir" ]] \
     && ok "report mutakhir" || ng "report mutakhir"
-[[ "$(report_line w a b)" == "w|a|b|usang" ]] \
-    && ok "report usang" || ng "report usang"
+[[ "$(report_line w a b)" == "w|a|b|outdated" ]] \
+    && ok "report outdated" || ng "report outdated"
 [[ "$(report_line w "" b)" == "w|?|b|tak-diketahui" ]] \
     && ok "report tak-diketahui" || ng "report tak-diketahui"
-rep="oxwm|x|y|usang
+rep="oxwm|x|y|outdated
 st|y|y|mutakhir"
-update_needed oxwm "$rep" && ok "needed usang" || ng "needed usang"
+update_needed oxwm "$rep" && ok "needed outdated" || ng "needed outdated"
 update_needed st "$rep" && ng "needed mutakhir" || ok "needed mutakhir"
 [[ -z "$(upstream_head "invalid://tak-ada-repo" 2>/dev/null)" ]] \
     && ok "upstream gagal -> kosong" || ng "upstream gagal -> kosong"
