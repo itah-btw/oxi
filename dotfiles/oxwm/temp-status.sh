@@ -1,6 +1,6 @@
 #!/bin/sh
 # Prints the hottest thermal zone, e.g. "Temp: 52°C".
-# NOTE: shell builtins only (no `cat` fork per zone) — this runs
+# NOTE: shell builtins only (no `cat` fork per zone) - this runs
 # synchronously on oxwm's main loop, so every forked process
 # here is input latency for the whole session.
 best=0

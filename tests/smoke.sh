@@ -151,7 +151,7 @@ grep -q "TryExec=/usr/local/bin/oxwm" "$T/xsessions/oxwm.desktop" \
 unset OXWM_XSESSION_DIR
 
 # 13. enable_services --dry-run tunjukkan keputusan DM vs autologin (read-only,
-# tanpa butuh root/distro — langsung panggil fungsi, bukan main penuh).
+# tanpa butuh root/distro - langsung panggil fungsi, bukan main penuh).
 DRY_RUN=1
 OXWM_DM=sddm enable_services 2>/dev/null | grep -qi "sddm" \
     && ok "dry-run sebut DM" || ng "dry-run sebut DM"

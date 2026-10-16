@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# oxt — ganti tema oxwm dalam sekali perintah.
+# oxt - ganti tema oxwm dalam sekali perintah.
 # Pakai: oxt {t|g|c|tokyonight|gruvbox|catppuccin}
 set -euo pipefail
 

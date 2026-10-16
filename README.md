@@ -1,8 +1,8 @@
 # oxwm-installer
 
-Script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, dan Debian/Ubuntu** — cukup satu perintah, desktop siap pakai.
+Script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, dan Debian/Ubuntu** - cukup satu perintah, desktop siap pakai.
 
-OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm — script membangunnya dari source.
+OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm - script membangunnya dari source.
 
 ## Cuplikan
 
@@ -22,9 +22,9 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 ## Yang dipasang script ini
 
-- Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
+- Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` - nama paket dipetakan otomatis per distro)
 - OXWM dibangun dari source komit teruji yang di-pin (`472c7675`; `--latest` untuk HEAD), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
-- Terminal `st` (bawaan: build 3 tema + dispatcher, ikut `oxt`) atau `alacritty`/`kitty`/`ghostty` dari repo — ketiganya ikut `oxt` via templat warna per tema
+- Terminal `st` (bawaan: build 3 tema + dispatcher, ikut `oxt`) atau `alacritty`/`kitty`/`ghostty` dari repo - ketiganya ikut `oxt` via templat warna per tema
 - Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Audio PipeWire lengkap
 (pipewire + wireplumber + pipewire-pulse/pipewire-alsa agar aplikasi
 PulseAudio/ALSA bersuara; socket user di-enable, grup audio ditambahkan). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
@@ -97,15 +97,15 @@ sendiri antara mode DM dan autologin.
 
 Saat dijalankan di terminal, installer menanyakan dua hal (masing-masing
 dengan penjelasan; Enter = bawaan; mode pipe/`--yes` otomatis pakai bawaan).
-Selalu berdampingan dengan DE/WM yang sudah ada — tidak ada opsi hapus.
+Selalu berdampingan dengan DE/WM yang sudah ada - tidak ada opsi hapus.
 
-1. **Sesi login** — menu ini hanya muncul bila **belum ada** display
+1. **Sesi login** - menu ini hanya muncul bila **belum ada** display
    manager (bila sudah ada, DM itu dipakai tanpa bertanya). Pilihannya:
    autologin tty1 (bawaan) atau pasang DM (`sddm`/`gdm`/`lightdm`;
    yang tak ada di repo disembunyikan). DM lama yang digantikan dimatikan
    (berlaku reboot, tanpa `--now` agar sesi berjalan tak mati).
    Flag: `--dm NAMA` / `--session auto|autologin`.
-2. **Terminal** — `st` (bawaan: build 3 tema), `alacritty`, `kitty`,
+2. **Terminal** - `st` (bawaan: build 3 tema), `alacritty`, `kitty`,
    `ghostty` (dari repo; yang tak ada disembunyikan, mis. `ghostty`
    di Debian). **Semua ikut `oxt`**: ganti tema memperbarui warna
    terminal juga (kitty/ghostty reload otomatis, alacritty berlaku di
@@ -115,7 +115,7 @@ Selalu berdampingan dengan DE/WM yang sudah ada — tidak ada opsi hapus.
 
 ## Pembaruan (`oxu`)
 
-`pacman -Syu` hanya meng-update paket repo — biner compile-an (oxwm, st)
+`pacman -Syu` hanya meng-update paket repo - biner compile-an (oxwm, st)
 tidak ikut. Untuk itu ada:
 
 ```bash
@@ -226,7 +226,7 @@ sudo dnf copr enable lihaohong/yazi
 sudo dnf install yazi
 ```
 
-`clipmenu` dari source (Debian/Fedora — butuh header X11 yang sudah
+`clipmenu` dari source (Debian/Fedora - butuh header X11 yang sudah
 dipasang installer untuk build oxwm, plus `xsel`):
 
 ```bash
