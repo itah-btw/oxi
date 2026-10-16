@@ -166,10 +166,6 @@ tokyonight/gruvbox/catppuccin semuanya terinstal, tinggal ganti kapan saja
 dengan `oxwm-theme` setelah login):
   curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash
 
-  (langsung dari GitHub agar selalu versi terbaru; cermin jsDelivr bisa stale:
-   https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh)
-  Cabang lain: curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/dev/install.sh | sudo bash
-
 Distro didukung: Arch Linux, Debian/Ubuntu, Fedora (terdeteksi otomatis).
 
 Sesi OXWM (otomatis): bila display manager terdeteksi (lightdm/gdm/sddm/
