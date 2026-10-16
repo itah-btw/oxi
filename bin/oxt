@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# oxt — ganti tema oxwm dalam sekali perintah.
+# Pakai: oxt {t|g|c|tokyonight|gruvbox|catppuccin}
+set -euo pipefail
+
+THEME_DIR="$HOME/.config/oxwm"
+
+norm_theme() {
+    case "${1:-}" in
+        t|tokyonight) printf '%s' tokyonight ;;
+        g|gruvbox) printf '%s' gruvbox ;;
+        c|catppuccin) printf '%s' catppuccin ;;
+        *) return 1 ;;
+    esac
+}
+
+current="$(cat "$THEME_DIR/theme" 2>/dev/null || echo tokyonight)"
+case "${1:-}" in
+    ""|-h|--help)
+        echo "tema aktif: $current"
+        echo "tersedia: t (tokyonight) g (gruvbox) c (catppuccin)"
+        echo "pakai: oxt {t|g|c}"
+        exit 0 ;;
+esac
+
+theme="$(norm_theme "$1")" || { echo "pakai: oxt {t|g|c}" >&2; exit 2; }
+echo "$theme" > "$THEME_DIR/theme"
+
+wallpaper=""
+shopt -s nullglob
+for f in "$THEME_DIR/wallpapers/$theme."*; do
+    wallpaper="$f"
+    break
+done
+shopt -u nullglob
+if [[ -n "$wallpaper" ]] && ! feh --bg-fill "$wallpaper" 2>/dev/null; then
+    echo "peringatan: wallpaper gagal dipasang (X tidak aktif?)" >&2
+fi
+
+if command -v dunst >/dev/null 2>&1 && pgrep -f 'dunst.*oxwm/dunstrc-' >/dev/null 2>&1; then
+    pkill -f 'dunst.*oxwm/dunstrc-' 2>/dev/null || true
+    sleep 0.5
+    (dunst >/dev/null 2>&1 &)
+fi
+
+if [[ -n "${DISPLAY:-}" ]] && command -v xdotool >/dev/null; then
+    xdotool key Super_L+Shift+r
+else
+    echo "reload manual: tekan Mod4+Shift+R untuk menerapkan warna" >&2
+fi

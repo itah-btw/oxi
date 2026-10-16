@@ -23,10 +23,10 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 ## Yang dipasang script ini
 
 - Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
-- OXWM dibangun dari source HEAD terbaru (`zig build`), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxwm-theme`, `dmenu_run`/`dmenu-themed`/`dunst` bertema)
+- OXWM dibangun dari source komit teruji yang di-pin (`472c7675`; `--latest` untuk HEAD), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
 - Terminal `st` dibangun dari source suckless dalam 3 tema + dispatcher `st` (ikut file tema oxwm)
-- Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome (font Nerd diunduh bila tak ada), `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` rilis upstream), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl)
-- Tanpa display manager: autologin getty di tty1 + `startx` otomatis (DM lama seperti LightDM/GDM/GDM3/SDDM dimatikan bila ada)
+- Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
+- Sesi OXWM: bila display manager terdeteksi (lightdm/gdm/sddm/lxdm/slim/xdm/ly/greetd/dll) maka DM dipakai + OXWM didaftarkan di `/usr/share/xsessions/oxwm.desktop`; bila tidak ada DM maka autologin getty di tty1 + `startx` otomatis
 - Dotfiles: `~/.config/oxwm/` (config + topbar, keybind, palet + wallpaper 3 tema, dunst bertema, skrip status cpu/temp/wifi/bt) + `~/.config/khal/` + `~/.xinitrc` (config lama dibackup)
 - Log instalasi: `/var/log/oxwm-installer/install.log` (fallback `./install.log` bila direktori itu tak bisa ditulis)
 
@@ -38,14 +38,14 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 ## Cara penggunaan
 
-Satu baris (butuh `curl`; tanpa klon dulu; mode pipe wajib `--yes`):
+Satu baris — cukup ini saja (semua tema ikut terpasang):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --yes
-curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash -s -- --theme gruvbox --yes
+curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash
 ```
 
-(Langsung dari GitHub agar selalu versi terbaru. Cermin jsDelivr bisa basi, hanya bila perlu: `https://cdn.jsdelivr.net/gh/itah-btw/oxwm-installer@main/install.sh`)
+Mode pipe menampilkan ringkasan + hitung mundur 5 detik sebelum lanjut
+(Ctrl-C untuk batal; `--yes` untuk lewati).
 
 Atau cara klasik:
 
@@ -60,7 +60,8 @@ chmod +x install.sh
 # 2. Instalasi penuh
 sudo ./install.sh
 
-# 3. Reboot: login konsol otomatis di tty1, startx jalan sendiri ke OXWM
+# 3. Reboot: pilih sesi OXWM di display manager (bila ada), atau
+#    login konsol otomatis di tty1 → startx jalan sendiri (bila tanpa DM)
 sudo reboot
 ```
 
@@ -68,13 +69,27 @@ Opsi lain:
 
 ```bash
 ./install.sh --help            # bantuan
-sudo ./install.sh --yes        # lewati konfirmasi
+./install.sh --version         # versi installer
+sudo ./install.sh --yes        # lewati konfirmasi (opsional; otomatis di mode pipe)
 sudo ./install.sh --rebuild    # bangun ulang oxwm + st walau sudah ada
-sudo ./install.sh --theme gruvbox --yes  # langsung pakai tema gruvbox
+sudo ./install.sh --no-update --yes  # lewati upgrade sistem
+sudo ./install.sh --latest --yes     # oxwm dari HEAD terbaru (default: pin teruji)
+sudo ./install.sh --uninstall --yes  # hapus biner + sesi (dotfiles dibiarkan)
+sudo ./install.sh --theme g --yes           # opsional: tema aktif awal (t/g/c)
+sudo ./install.sh --force-autologin  # paksa autologin tty1 walau ada DM
+sudo ./install.sh --no-autologin     # jangan sentuh getty/startx (login manual)
 ```
 
-Tanpa display manager: login konsol otomatis di tty1, lalu `startx` jalan
-sendiri memakai `~/.xinitrc`. TTY lain tetap login manual biasa.
+OXWM dibangun dari komit teruji yang di-pin (`472c7675`, reproduksibel);
+`--latest` atau `OXWM_PIN=""` untuk HEAD terbaru, `OXWM_PIN=<40-heksa>`
+untuk komit lain.
+
+Sesi otomatis: ada DM → pakai DM (entri `OXWM` muncul di menu sesi;
+autologin buatan installer yang lama dibersihkan agar tak berebut VT).
+Tanpa DM → login konsol otomatis di tty1, lalu `startx` jalan sendiri
+memakai `~/.xinitrc`. TTY lain tetap login manual biasa. Pindah
+belakangan (pasang/copot DM) cukup jalankan ulang installer: ia beralih
+sendiri antara mode DM dan autologin.
 
 ## Shortcut dasar OXWM (config bawaan)
 
@@ -96,22 +111,15 @@ sendiri memakai `~/.xinitrc`. TTY lain tetap login manual biasa.
 
 ## Tema
 
-Tiga tema bawaan (topbar, border, st/dmenu/dunst, wallpaper): `tokyonight`,
-`gruvbox`, `catppuccin`. Palet di `~/.config/oxwm/colors/`, wallpaper di
-`~/.config/oxwm/wallpapers/`, pilihan aktif di `~/.config/oxwm/theme`.
+Semua tema (`t=tokyonight`, `g=gruvbox`, `c=catppuccin`) SELALU terpasang:
+st 3 varian, palet, wallpaper, dunstrc per tema. Ganti tema aktif:
 
 ```bash
-sudo ./install.sh --theme gruvbox   # tema awal saat instalasi
-oxwm-theme catppuccin               # ganti kapan saja (wallpaper + dunst + reload ikut)
+oxt g   # atau oxt gruvbox
 ```
 
-`oxwm-theme` menulis `~/.config/oxwm/theme`, memasang wallpaper tema itu,
-me-restart dunst dengan confignya, lalu me-reload oxwm. Tanpa X aktif (atau
-tanpa `xdotool`), reload dilakukan manual dengan `Super+Shift+R`. Cara manual
-tetap bisa: tulis langsung (`echo gruvbox > ~/.config/oxwm/theme`) lalu reload.
-
-Tanpa `--theme`, instalasi memakai `tokyonight` untuk pengguna baru dan
-tidak mengubah file tema yang sudah ada.
+`oxt` menulis `~/.config/oxwm/theme`, memasang wallpaper, me-restart dunst,
+lalu me-reload oxwm (reload manual dengan `Super+Shift+R` bila tak ada X).
 
 ## Troubleshooting
 
@@ -125,8 +133,9 @@ tidak mengubah file tema yang sudah ada.
 
 ```
 oxwm-installer/
-├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--theme)
-├── bin/oxwm-theme                  # perintah ganti tema (terpasang ke /usr/local/bin)
+├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--latest/--no-update/--uninstall/--theme/--force-autologin/--no-autologin)
+├── bin/oxt                        # perintah ganti tema (terpasang ke /usr/local/bin)
+├── bin/oxt                  # alias ke oxt
 ├── bin/dmenu_run, bin/dmenu-themed # dmenu bertema (terpasang ke /usr/local/bin)
 ├── bin/dunst                       # dunst bertema (terpasang ke /usr/local/bin)
 ├── dotfiles/oxwm/config.lua         # config OXWM: topbar, keybind (baca ~/.config/oxwm/theme)
@@ -195,15 +204,3 @@ cargo install bluetui wiremix
 # pastikan ~/.cargo/bin ada di PATH
 ```
 
-## Upload ke GitHub (dari folder ini)
-
-```bash
-git init
-git add .
-git commit -m "oxwm-installer: instalasi otomatis OXWM di Arch Linux"
-git branch -M main
-git remote add origin https://github.com/itah-btw/oxwm-installer.git
-git push -u origin main
-```
-
-Lisensi: MIT.
