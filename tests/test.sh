@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Uji asap oxwm-installer: sintaks + fungsi murni. Tidak menyentuh sistem,
-# tidak butuh root. Jalan dari akar repo: bash tests/smoke.sh
+# Uji fungsi oxwm-installer: sintaks + fungsi murni + regresi. Tidak menyentuh
+# sistem (bindir/state di-override ke dir temp), tidak butuh root.
+# Jalan dari akar repo: bash tests/test.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,7 +10,7 @@ ok() { echo "ok: $*"; }
 ng() { echo "GAGAL: $*"; fail=1; }
 
 # 1. Sintaks semua skrip shell.
-for f in install.sh bin/* tests/smoke.sh; do
+for f in install.sh bin/* tests/test.sh; do
     code=0
     bash -n "$f" 2>/dev/null || code=$?
     if [[ "$code" -eq 0 ]]; then ok "sintaks $f"; else ng "sintaks $f"; fi
@@ -20,7 +21,7 @@ done
 source ./install.sh
 # Diekspor agar jelas dipakai lintas-berkas oleh fungsi install.sh (sekaligus
 # menenangkan SC2034: shellcheck tak melihat pemakaian antar-berkas).
-export DISTRO DRY_RUN OXWM_LOG_DIR FORCE_AUTOLOGIN NO_AUTOLOGIN OXWM_DM OXWM_GETTY_DROPIN OXWM_XSESSION_DIR OXWM_PIPE_GRACE TARGET_HOME NO_UPDATE LATEST UNINSTALL SELF_UPDATE CHECK_ONLY OXWM_STATE_DIR OXWM_MENU_AUTO SESSION_REQ SESSION_SET TERMINAL TERMINAL_SET OLD_DM
+export DISTRO DRY_RUN OXWM_LOG_DIR FORCE_AUTOLOGIN NO_AUTOLOGIN OXWM_DM OXWM_GETTY_DROPIN OXWM_XSESSION_DIR OXWM_PIPE_GRACE TARGET_HOME NO_UPDATE LATEST UNINSTALL SELF_UPDATE CHECK_ONLY OXWM_STATE_DIR OXWM_MENU_AUTO SESSION_REQ SESSION_SET TERMINAL TERMINAL_SET OLD_DM OXWM_BIN_DIR OXWM_ZIG_DIR
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
@@ -216,10 +217,20 @@ else
     ok "st theme rusak ditolak"
 fi
 
-# 19. do_uninstall(): bersih-bersih tanpa sentuh config user.
-TARGET_HOME="$T/fakehome"; mkdir -p "$TARGET_HOME"
+# 19. do_uninstall(): bersih-bersih tanpa sentuh sistem nyata (bindir di-override).
+TARGET_HOME="$T/fakehome"; mkdir -p "$T/fakehome"
 ensure_startx_block "$TARGET_HOME/.bash_profile"
-export OXWM_XSESSION_DIR="$T/us-xsess" OXWM_GETTY_DROPIN="$T/us-autologin.conf" OXWM_STATE_DIR="$T/us-state"
+export OXWM_XSESSION_DIR="$T/us-xsess" OXWM_GETTY_DROPIN="$T/us-autologin.conf" \
+       OXWM_STATE_DIR="$T/us-state" OXWM_BIN_DIR="$T/us-bin" OXWM_ZIG_DIR="$T/us-zig"
+mkdir -p "$OXWM_BIN_DIR" "$OXWM_ZIG_DIR"
+for b in oxwm oxt oxu oxwm-update oxwm-theme dmenu-themed st-tokyonight; do
+    : > "$OXWM_BIN_DIR/$b"
+done
+printf '#!/bin/sh\necho punyaku sendiri\n' > "$OXWM_BIN_DIR/st" # tanpa penanda = milik user
+printf '#!/bin/sh\n# dmenu_run bertema oxwm\n' > "$OXWM_BIN_DIR/dmenu_run"
+printf '#!/bin/sh\n# dunst bertema oxwm\n' > "$OXWM_BIN_DIR/dunst"
+: > "$OXWM_ZIG_DIR/zig"
+ln -s "$OXWM_ZIG_DIR/zig" "$OXWM_BIN_DIR/zig"
 install_xsession_entry
 setup_autologin "itah" >/dev/null 2>&1
 record_state terminal "alacritty"
@@ -232,7 +243,17 @@ do_uninstall >/dev/null 2>&1
     && ok "uninstall hapus startx" || ng "uninstall hapus startx"
 [[ ! -d "$T/us-state" ]] \
     && ok "uninstall hapus state oxu" || ng "uninstall hapus state oxu"
-unset OXWM_XSESSION_DIR OXWM_GETTY_DROPIN TARGET_HOME OXWM_STATE_DIR
+[[ ! -e "$T/us-bin/oxwm" && ! -e "$T/us-bin/oxt" && ! -e "$T/us-bin/oxu" \
+   && ! -e "$T/us-bin/oxwm-update" && ! -e "$T/us-bin/oxwm-theme" \
+   && ! -e "$T/us-bin/dmenu-themed" && ! -e "$T/us-bin/st-tokyonight" ]] \
+    && ok "uninstall hapus biner installer" || ng "uninstall hapus biner installer"
+[[ ! -e "$T/us-bin/dmenu_run" && ! -e "$T/us-bin/dunst" ]] \
+    && ok "uninstall hapus wrapper bertanda" || ng "uninstall hapus wrapper bertanda"
+[[ -f "$T/us-bin/st" ]] \
+    && ok "uninstall tak sentuh st asing" || ng "uninstall tak sentuh st asing"
+[[ ! -e "$T/us-bin/zig" && ! -d "$T/us-zig" ]] \
+    && ok "uninstall hapus zig tarball" || ng "uninstall hapus zig tarball"
+unset OXWM_XSESSION_DIR OXWM_GETTY_DROPIN TARGET_HOME OXWM_STATE_DIR OXWM_BIN_DIR OXWM_ZIG_DIR
 
 # 20. Pin upstream (#3): format versi + sha256 valid.
 [[ "$ZIG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \

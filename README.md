@@ -194,8 +194,8 @@ oxwm-installer/
 ├── dotfiles/xinitrc                 # dipakai startx
 ├── packages/{arch,debian,fedora}-oxwm.txt  # daftar paket
 ├── screenshots/                     # cuplikan layar untuk README
-├── tests/smoke.sh                   # uji asap (sintaks + fungsi murni)
-├── .github/workflows/ci.yml         # CI: shellcheck + uji asap + dry-run alur utama
+├── tests/test.sh                   # uji fungsi (sintaks + fungsi murni + regresi)
+├── .github/workflows/ci.yml         # CI: shellcheck + uji fungsi + dry-run alur utama
 └── README.md
 ```
 

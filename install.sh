@@ -1452,23 +1452,26 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
         log "(dry-run) hapus biner oxwm/st/helpers + oxu + state pembaruan + sesi (dotfiles dibiarkan)"
         return 0
     fi
+    # Bindir + lokasi zig bisa di-override (uji fungsi memakai dir temp agar
+    # tak pernah menyentuh /usr/local/bin + /opt sungguhan).
+    local bindir="${OXWM_BIN_DIR:-/usr/local/bin}" zigdir="${OXWM_ZIG_DIR:-/opt/zig}"
     # Biner bernama unik buatan installer (tak dipakai paket distro).
     local f
-    for f in /usr/local/bin/oxwm \
-             /usr/local/bin/st-tokyonight /usr/local/bin/st-gruvbox /usr/local/bin/st-catppuccin \
-             /usr/local/bin/oxt /usr/local/bin/oxu /usr/local/bin/oxwm-update \
-             /usr/local/bin/oxwm-theme /usr/local/bin/dmenu-themed; do
+    for f in "$bindir"/oxwm \
+             "$bindir"/st-tokyonight "$bindir"/st-gruvbox "$bindir"/st-catppuccin \
+             "$bindir"/oxt "$bindir"/oxu "$bindir"/oxwm-update \
+             "$bindir"/oxwm-theme "$bindir"/dmenu-themed; do
         run_or_dry rm -f "$f"
     done
     # Nama yang menimpa biner sistem: hanya bila wrapper buatan kita,
     # agar dmenu/dunst/st asli kembali dipakai setelahnya.
-    remove_if_ours /usr/local/bin/st "Dispatcher tema st"
-    remove_if_ours /usr/local/bin/dmenu_run "bertema oxwm"
-    remove_if_ours /usr/local/bin/dunst "bertema oxwm"
+    remove_if_ours "$bindir/st" "Dispatcher tema st"
+    remove_if_ours "$bindir/dmenu_run" "bertema oxwm"
+    remove_if_ours "$bindir/dunst" "bertema oxwm"
     # zig tarball buatan kita (symlink -> /opt/zig): kembalikan bila begitu.
-    if [[ "$(readlink /usr/local/bin/zig 2>/dev/null)" == "/opt/zig/zig" ]]; then
-        run_or_dry rm -f /usr/local/bin/zig
-        run_or_dry rm -rf /opt/zig
+    if [[ "$(readlink "$bindir/zig" 2>/dev/null)" == "$zigdir/zig" ]]; then
+        run_or_dry rm -f "$bindir/zig"
+        run_or_dry rm -rf "$zigdir"
     else
         log "zig dibiarkan (bukan tarball installer)"
     fi

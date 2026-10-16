@@ -11,7 +11,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
       - name: shellcheck
         run: shellcheck -S warning install.sh bin/* tests/*.sh
-      - name: Uji asap
-        run: bash tests/smoke.sh
+      - name: Uji fungsi + regresi
+        run: bash tests/test.sh
       - name: Uji alur utama (dry-run)
         run: bash install.sh --dry-run --yes
