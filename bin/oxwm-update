@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# oxwm-update — perbarui komponen OXWM yang basi (bangun ulang selektif).
+# Selalu memakai installer terbaru dari GitHub agar pin versi ikut terbaru.
+# Alias pendek: oxu. Butuh sudo + koneksi internet (cek versi ke upstream).
+# Pakai: oxu [--check] [--latest] [--yes]
+set -eu
+REPO_SLUG="${OXWM_REPO_SLUG:-itah-btw/oxwm-installer}"
+REF="${OXWM_REF:-main}"
+# shellcheck disable=SC2086
+exec curl -fsSL "https://raw.githubusercontent.com/${REPO_SLUG}/${REF}/install.sh" | sudo bash -s -- --self-update "$@"

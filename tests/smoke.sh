@@ -20,7 +20,7 @@ done
 source ./install.sh
 # Diekspor agar jelas dipakai lintas-berkas oleh fungsi install.sh (sekaligus
 # menenangkan SC2034: shellcheck tak melihat pemakaian antar-berkas).
-export DISTRO DRY_RUN OXWM_LOG_DIR FORCE_AUTOLOGIN NO_AUTOLOGIN OXWM_DM OXWM_GETTY_DROPIN OXWM_XSESSION_DIR OXWM_PIPE_GRACE TARGET_HOME NO_UPDATE LATEST UNINSTALL
+export DISTRO DRY_RUN OXWM_LOG_DIR FORCE_AUTOLOGIN NO_AUTOLOGIN OXWM_DM OXWM_GETTY_DROPIN OXWM_XSESSION_DIR OXWM_PIPE_GRACE TARGET_HOME NO_UPDATE LATEST UNINSTALL SELF_UPDATE CHECK_ONLY OXWM_STATE_DIR OXWM_MENU_AUTO SESSION_REQ SESSION_SET TERMINAL TERMINAL_SET OLD_DM
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
@@ -250,6 +250,86 @@ if (DISTRO=arch install_oxwm_binary >/dev/null 2>&1); then
 else
     ok "binary kosong fallback source"
 fi
+
+# 22. State + pembaruan mandiri (oxu).
+export OXWM_STATE_DIR="$T/state"
+record_state cobacoba "abc123"
+[[ "$(read_state cobacoba)" == "abc123" ]] \
+    && ok "state tulis-baca" || ng "state tulis-baca"
+[[ -z "$(read_state tak-ada)" ]] \
+    && ok "state hilang kosong" || ng "state hilang kosong"
+staleness "sama" "sama" && ok "staleness sama" || ng "staleness sama"
+staleness "a" "b" && ng "staleness beda" || ok "staleness beda"
+staleness "" "b" && ng "staleness kosong" || ok "staleness kosong"
+[[ "$(report_line w a a)" == "w|a|a|mutakhir" ]] \
+    && ok "report mutakhir" || ng "report mutakhir"
+[[ "$(report_line w a b)" == "w|a|b|basi" ]] \
+    && ok "report basi" || ng "report basi"
+[[ "$(report_line w "" b)" == "w|?|b|tak-diketahui" ]] \
+    && ok "report tak-diketahui" || ng "report tak-diketahui"
+rep="oxwm|x|y|basi
+st|y|y|mutakhir"
+update_needed oxwm "$rep" && ok "needed basi" || ng "needed basi"
+update_needed st "$rep" && ng "needed mutakhir" || ok "needed mutakhir"
+[[ -z "$(upstream_head "invalid://tak-ada-repo" 2>/dev/null)" ]] \
+    && ok "upstream gagal -> kosong" || ng "upstream gagal -> kosong"
+[[ -f bin/oxu && -f bin/oxwm-update ]] \
+    && ok "oxu + oxwm-update ada" || ng "oxu + oxwm-update ada"
+grep -q "oxwm-update" bin/oxu && grep -q -- "--self-update" bin/oxwm-update \
+    && ok "wrapper terhubung" || ng "wrapper terhubung"
+code=0; bash install.sh --self-update --uninstall >/dev/null 2>&1 || code=$?
+[[ "$code" -eq 2 ]] && ok "self-update vs uninstall bertentangan" || ng "self-update vs uninstall bertentangan ($code)"
+unset OXWM_STATE_DIR
+
+# 23. Menu pilihan + pemetaan DM (murni, tanpa sentuh sistem).
+export OXWM_MENU_AUTO=1
+[[ "$(match_choice "" def "a|A" "b|B")" == "def" ]] \
+    && ok "match kosong -> default" || ng "match kosong -> default"
+[[ "$(match_choice "2" def "a|A" "b|B")" == "b" ]] \
+    && ok "match nomor" || ng "match nomor"
+[[ "$(match_choice "B" def "a|A" "b|B")" == "b" ]] \
+    && ok "match nama case-insensitive" || ng "match nama case-insensitive"
+match_choice "9" def "a|A" >/dev/null 2>&1 && ng "match invalid ditolak" || ok "match invalid ditolak"
+DISTRO=debian
+[[ "$(dm_pkg gdm)" == "gdm3" && "$(dm_unit gdm)" == "gdm3" ]] \
+    && ok "dm gdm debian -> gdm3" || ng "dm gdm debian -> gdm3"
+DISTRO=arch
+[[ "$(dm_pkg gdm)" == "gdm" && "$(dm_pkg sddm)" == "sddm" ]] \
+    && ok "dm arch" || ng "dm arch"
+[[ "$(prompt_choice "T" dflt "a|A|desc" 2>/dev/null)" == "dflt" ]] \
+    && ok "prompt auto -> default" || ng "prompt auto -> default"
+repo_has_pkg "paket-tak-mungkin-ada-xyz" && ng "repo_has_pkg asing" || ok "repo_has_pkg asing"
+code=0; bash install.sh --dm nto >/dev/null 2>&1 || code=$?
+[[ "$code" -eq 2 ]] && ok "dm invalid exit 2" || ng "dm invalid exit 2 ($code)"
+code=0; bash install.sh --terminal nto >/dev/null 2>&1 || code=$?
+[[ "$code" -eq 2 ]] && ok "terminal invalid exit 2" || ng "terminal invalid exit 2 ($code)"
+code=0; bash install.sh --dm sddm --session autologin >/dev/null 2>&1 || code=$?
+[[ "$code" -eq 2 ]] && ok "sesi ganda exit 2" || ng "sesi ganda exit 2 ($code)"
+code=0; bash install.sh --greeter ly >/dev/null 2>&1 || code=$?
+[[ "$code" -eq 2 ]] && ok "greeter dihapus exit 2" || ng "greeter dihapus exit 2 ($code)"
+# 24. Tema terminal ikut oxt + menu sesi kondisional.
+for t in tokyonight gruvbox catppuccin; do
+    [[ -f "dotfiles/alacritty/alacritty-$t.toml" && -f "dotfiles/kitty/kitty-$t.conf" && -f "dotfiles/ghostty/config-$t" ]] \
+        && ok "tema terminal $t lengkap" || ng "tema terminal $t lengkap"
+done
+grep -q '#1a1b26' dotfiles/alacritty/alacritty-tokyonight.toml \
+    && grep -q 'color15 #c0caf5' dotfiles/kitty/kitty-tokyonight.conf \
+    && grep -q 'palette = 15=#c0caf5' dotfiles/ghostty/config-tokyonight \
+    && ok "nilai tema tokyonight konsisten" || ng "nilai tema tokyonight konsisten"
+grep -q "alacritty" bin/oxt && grep -q "USR1" bin/oxt && grep -q "ghostty" bin/oxt \
+    && ok "oxt hook 3 terminal" || ng "oxt hook 3 terminal"
+# Menu sesi dilewati bila DM ada (pakai DM), muncul bila tidak ada.
+DISTRO=arch; DRY_RUN=1; SESSION_REQ=""; SESSION_SET=0
+OXWM_DM=sddm resolve_choices >/dev/null 2>&1
+[[ "$SESSION_REQ" == "auto" ]] \
+    && ok "sesi dilewati bila DM ada" || ng "sesi dilewati bila DM ada ($SESSION_REQ)"
+SESSION_REQ=""; SESSION_SET=0
+OXWM_DM='' resolve_choices >/dev/null 2>&1
+[[ "$SESSION_REQ" == "autologin" ]] \
+    && ok "sesi default autologin bila tanpa DM" || ng "sesi default autologin bila tanpa DM ($SESSION_REQ)"
+[[ "$TERMINAL" == "st" ]] \
+    && ok "terminal default st" || ng "terminal default st ($TERMINAL)"
+unset OXWM_DM; DRY_RUN=0
 
 if [[ "$fail" -eq 0 ]]; then echo "SEMUA UJI LOLOS"; else echo "ADA UJI GAGAL"; fi
 exit "$fail"

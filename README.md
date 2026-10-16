@@ -24,7 +24,7 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 
 - Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` — nama paket dipetakan otomatis per distro)
 - OXWM dibangun dari source komit teruji yang di-pin (`472c7675`; `--latest` untuk HEAD), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
-- Terminal `st` dibangun dari source suckless dalam 3 tema + dispatcher `st` (ikut file tema oxwm)
+- Terminal `st` (bawaan: build 3 tema + dispatcher, ikut `oxt`) atau `alacritty`/`kitty`/`ghostty` dari repo — ketiganya ikut `oxt` via templat warna per tema
 - Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
 - Sesi OXWM: bila display manager terdeteksi (lightdm/gdm/sddm/lxdm/slim/xdm/ly/greetd/dll) maka DM dipakai + OXWM didaftarkan di `/usr/share/xsessions/oxwm.desktop`; bila tidak ada DM maka autologin getty di tty1 + `startx` otomatis
 - Dotfiles: `~/.config/oxwm/` (config + topbar, keybind, palet + wallpaper 3 tema, dunst bertema, skrip status cpu/temp/wifi/bt) + `~/.config/khal/` + `~/.xinitrc` (config lama dibackup)
@@ -90,6 +90,43 @@ Tanpa DM → login konsol otomatis di tty1, lalu `startx` jalan sendiri
 memakai `~/.xinitrc`. TTY lain tetap login manual biasa. Pindah
 belakangan (pasang/copot DM) cukup jalankan ulang installer: ia beralih
 sendiri antara mode DM dan autologin.
+
+## Pilihan instalasi (menu interaktif)
+
+Saat dijalankan di terminal, installer menanyakan dua hal (masing-masing
+dengan penjelasan; Enter = bawaan; mode pipe/`--yes` otomatis pakai bawaan).
+Selalu berdampingan dengan DE/WM yang sudah ada — tidak ada opsi hapus.
+
+1. **Sesi login** — menu ini hanya muncul bila **belum ada** display
+   manager (bila sudah ada, DM itu dipakai tanpa bertanya). Pilihannya:
+   autologin tty1 (bawaan) atau pasang DM (`sddm`/`gdm`/`lightdm`;
+   yang tak ada di repo disembunyikan). DM lama yang digantikan dimatikan
+   (berlaku reboot, tanpa `--now` agar sesi berjalan tak mati).
+   Flag: `--dm NAMA` / `--session auto|autologin`.
+2. **Terminal** — `st` (bawaan: build 3 tema), `alacritty`, `kitty`,
+   `ghostty` (dari repo; yang tak ada disembunyikan, mis. `ghostty`
+   di Debian). **Semua ikut `oxt`**: ganti tema memperbarui warna
+   terminal juga (kitty/ghostty reload otomatis, alacritty berlaku di
+   terminal baru). Config baru ditemplat otomatis (`local terminal`,
+   semua `st -e`, dan keybind wiremix); config lama tidak diubah.
+   Flag: `--terminal NAMA`.
+
+## Pembaruan (`oxu`)
+
+`pacman -Syu` hanya meng-update paket repo — biner compile-an (oxwm, st)
+tidak ikut. Untuk itu ada:
+
+```bash
+oxu            # bangun ulang hanya komponen yang basi
+oxu --check    # cek saja (tanpa root pun bisa)
+```
+
+`oxu` selalu mengunduh installer terbaru dulu (pin ikut terbaru), lalu
+membandingkan dengan catatan versi di `/var/lib/oxwm-installer/`
+(komit oxwm/st, versi zig/font/fastfetch). Paket repo (`dmenu`, `btop`,
+`fastfetch` Debian baru, dst.) tetap urusan `pacman -Syu`/`apt upgrade`.
+Jalankan sekali `sudo ./install.sh` (atau reinstall) agar perintah `oxu`
+terpasang di `/usr/local/bin`.
 
 ## Shortcut dasar OXWM (config bawaan)
 

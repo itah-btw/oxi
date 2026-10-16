@@ -27,6 +27,30 @@ esac
 theme="$(norm_theme "$1")" || { echo "pakai: oxt {t|g|c}" >&2; exit 2; }
 echo "$theme" > "$THEME_DIR/theme"
 
+# Terminal repo (alacritty/kitty/ghostty) ikut tema: salin config tema aktif
+# ke path live-nya. st tak perlu apa-apa (dispatcher + reload oxwm cukup).
+term="$(tr -d '[:space:]' < /var/lib/oxwm-installer/terminal 2>/dev/null || echo st)"
+case "$term" in
+    alacritty)
+        mkdir -p "$HOME/.config/alacritty"
+        # shellcheck disable=SC2016
+        cp "$THEME_DIR/alacritty-$theme.toml" "$HOME/.config/alacritty/alacritty.toml" \
+            && echo "alacritty: tema diterapkan (terminal baru; yang lama tetap)" >&2 \
+            || echo "peringatan: templat alacritty-$theme.toml tak ketemu" >&2 ;;
+    kitty)
+        mkdir -p "$HOME/.config/kitty"
+        if cp "$THEME_DIR/kitty-$theme.conf" "$HOME/.config/kitty/kitty.conf" 2>/dev/null; then
+            pkill -USR1 -x kitty 2>/dev/null || true
+        else
+            echo "peringatan: templat kitty-$theme.conf tak ketemu" >&2
+        fi ;;
+    ghostty)
+        mkdir -p "$HOME/.config/ghostty"
+        cp "$THEME_DIR/config-$theme" "$HOME/.config/ghostty/config" 2>/dev/null \
+            && echo "ghostty: tema diterapkan (reload otomatis)" >&2 \
+            || echo "peringatan: templat config-$theme tak ketemu" >&2 ;;
+esac
+
 wallpaper=""
 shopt -s nullglob
 for f in "$THEME_DIR/wallpapers/$theme."*; do
