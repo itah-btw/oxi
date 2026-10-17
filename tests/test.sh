@@ -2,6 +2,9 @@
 # Uji fungsi oxwm-installer: sintaks + fungsi murni + regresi. Tidak menyentuh
 # sistem (bindir/state di-override ke dir temp), tidak butuh root.
 # Jalan dari akar repo: bash tests/test.sh
+# shellcheck disable=SC2015,SC1091,SC2329
+# SC2015: idiom "A && ok || ng" disengaja (ok/ng tak pernah gagal).
+# SC1091/SC2329: source tak ikut -x; flaky dipanggil lintas fungsi (retry).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -387,6 +390,28 @@ if (template_config_terminal "$T/cfg-bad.lua" alacritty) >/dev/null 2>&1; then
 else
     ok "templating gagal keras bila sisa pola st"
 fi
+
+# 25. Hardening: curl wajib batasi protokol redirect juga (bukan cuma URL awal).
+c=$(grep -c "proto-redir '=https'" install.sh)
+[[ "$c" -ge 4 ]] && ok "install.sh pakai --proto-redir" || ng "install.sh pakai --proto-redir ($c)"
+grep -q "proto-redir '=https'" bin/oxwm-update \
+    && ok "oxwm-update pakai --proto-redir" || ng "oxwm-update pakai --proto-redir"
+
+# 26. ERR trap: kegagalan tak terduga tercatat di log beserta kodenya.
+grep -q "trap 'on_err" install.sh && grep -q '^set -Eeuo' install.sh \
+    && ok "ERR trap aktif (set -E)" || ng "ERR trap aktif (set -E)"
+( trap 'on_err "$?" "$BASH_COMMAND" "${BASH_LINENO[0]}"' ERR; LOG_FILE="$T/e.log"; set +e; false; exit 0 ) >/dev/null 2>&1
+grep -q "keluar kode 1" "$T/e.log" \
+    && ok "ERR trap catat kegagalan" || ng "ERR trap catat kegagalan"
+
+# 27. Lock anti-konkurensi: proses kedua pada lockfile yang sama harus ditolak.
+OXWM_LOCK_FILE="$T/lock1"
+acquire_lock >/dev/null
+code=0
+# shellcheck disable=SC1091
+( source "$PWD/install.sh"; LOG_FILE="$T/e2.log"; OXWM_LOCK_FILE="$T/lock1"; acquire_lock ) >/dev/null 2>&1 || code=$?
+[[ "$code" -ne 0 ]] && ok "lock tolak instalasi paralel" || ng "lock tolak instalasi paralel"
+unset OXWM_LOCK_FILE
 
 if [[ "$fail" -eq 0 ]]; then echo "SEMUA UJI LOLOS"; else echo "ADA UJI GAGAL"; fi
 exit "$fail"

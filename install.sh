@@ -14,7 +14,7 @@
 #
 # Display manager (bila terdeteksi) dipakai apa adanya + entri sesi OXWM;
 # tanpa display manager: login konsol otomatis di tty1 lalu startx.
-set -euo pipefail
+set -Eeuo pipefail
 
 LOG_FILE="install.log"  # ditimpa init_log() ke path tetap bila bisa ditulis
 VERSION="1.2.0"
@@ -59,6 +59,10 @@ REPO_DIR=""                     # diisi resolve_repo_dir(); jangan diakses langs
 
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG_FILE"; }
 die() { log "ERROR: $*"; exit 1; }
+# shellcheck disable=SC2329 # dipanggil via trap ERR di main()
+on_err() { # $1=kode $2=perintah $3=baris - catat kegagalan tak terduga (set -e)
+    log "ERROR: keluar kode $1 di baris ${3:-?}: ${2:-?}"
+}
 tahap() { # $1=tahap $2=status $3=pesan - riwayat tahap ke berkas log
     # Status "ok" untuk langkah yang dilewati (dry-run) adalah dusta.
     if [[ "$DRY_RUN" -eq 1 && "$2" == "ok" ]]; then
@@ -90,6 +94,15 @@ cleanup_tmpdirs() {
     if [[ "${#TMPDIRS[@]}" -gt 0 ]]; then
         rm -rf "${TMPDIRS[@]}" 2>/dev/null || true
     fi
+}
+
+# Tolak instalasi paralel (dua terminal/dua sesi tabrakan di
+# /usr/local/bin, drop-in getty, dst). Non-blokir: langsung gagal.
+acquire_lock() {
+    local lock="${OXWM_LOCK_FILE:-/var/lock/oxwm-installer.lock}"
+    exec 9>"$lock" || die "gagal membuka lockfile $lock"
+    flock -n 9 || die "installer sedang berjalan di sesi lain (lock: $lock)"
+    log "lock terkunci: $lock"
 }
 
 pipe_grace() { # jeda persetujuan di mode pipe tanpa --yes (batal via Ctrl-C)
@@ -137,7 +150,7 @@ resolve_repo_dir() {
     tmp="$(mktemp -d)" || die "gagal buat direktori sementara"
     TMPDIRS+=("$tmp")
     log "unduh repo $REPO_SLUG@$REF ke $tmp..."
-    curl -fsSL --retry 3 --retry-delay 2 --proto '=https' \
+    curl -fsSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
         "https://github.com/$REPO_SLUG/archive/refs/heads/$REF.tar.gz" -o "$tmp/repo.tar.gz" \
         || die "unduhan repo gagal (cek koneksi/nama cabang)"
     tar -xzf "$tmp/repo.tar.gz" -C "$tmp" \
@@ -444,7 +457,7 @@ ensure_fastfetch() { # semua distro; Debian lama tanpa paket resmi -> fallback .
     if grep -q "Candidate: (none)" <<<"$policy"; then
         log "fastfetch tak ada di repo -> unduh .deb upstream $FASTFETCH_VERSION (terpin)"
         deb="$tmp/fastfetch-${FASTFETCH_VERSION}-linux-amd64.deb"
-        curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+        curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
             "https://github.com/fastfetch-cli/fastfetch/releases/download/${FASTFETCH_VERSION}/fastfetch-linux-amd64.deb" \
             -o "$deb" || die "unduhan fastfetch gagal"
         log "verifikasi sha256 .deb fastfetch..."
@@ -481,7 +494,7 @@ ensure_zig() { # pastikan compiler zig seri 0.16.x ada (yang didukung oxwm); kal
     local arsip tmp
     tmp="$(new_tmpdir)"
     arsip="$tmp/zig.tar.xz"
-    curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+    curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
         "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
         -o "$arsip" || die "unduhan zig gagal"
     log "verifikasi sha256 tarball zig..."
@@ -791,7 +804,7 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
     local f
     for f in "$src_dir"/oxwm/colors/*.lua "$src_dir"/oxwm/wallpapers/* "$src_dir"/oxwm/*-status.sh "$src_dir"/oxwm/dunstrc-*; do
         [[ -f "$f" ]] || continue
-        local rel="${f#$src_dir/oxwm/}"
+        local rel="${f#"${src_dir}"/oxwm/}"
         # dunstrc + skrip status selalu disegarkan agar ikut tema/perbaikan;
         # sisanya hanya bila pengguna belum punya.
         case "$rel" in
@@ -935,7 +948,7 @@ dm_from_units() { # $1=teks `systemctl list-unit-files` -> nama DM atau "" (murn
     for cand in "${DM_CANDIDATES[@]}"; do
         while IFS= read -r line; do
             [[ "$line" == "${cand}.service "* || "$line" == "${cand}.service	"* ]] || continue
-            state="${line#${cand}.service}"
+            state="${line#"${cand}".service}"
             if [[ "$state" == *enabled* ]]; then
                 printf '%s' "$cand"
                 return 0
@@ -1285,7 +1298,7 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
         tmp="$(new_tmpdir)"
         arsip="$tmp/JetBrainsMono.tar.xz"
         mkdir -p "$target"
-        curl -fSL --retry 3 --retry-delay 2 --proto '=https' \
+        curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
             "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
             -o "$arsip" || die "unduhan font gagal"
         log "verifikasi sha256 arsip font..."
@@ -1573,11 +1586,15 @@ main() {
     fi
     init_log
     trap cleanup_tmpdirs EXIT
+    trap 'on_err "$?" "$BASH_COMMAND" "${BASH_LINENO[0]}"' ERR
     log "========== oxwm-installer mulai (dry-run=$DRY_RUN) =========="
     if [[ "$LATEST" -eq 1 ]]; then
         log "catatan: --latest, OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
     fi
     check_root
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        acquire_lock
+    fi
     if [[ "$UNINSTALL" -eq 1 ]]; then
         if [[ "$DRY_RUN" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then
             if [[ ! -t 0 ]]; then

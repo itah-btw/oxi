@@ -10,8 +10,26 @@ jobs:
       - name: Pasang shellcheck
         run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
       - name: shellcheck
-        run: shellcheck -S warning install.sh bin/* tests/*.sh
+        run: shellcheck -S info install.sh bin/* tests/*.sh
       - name: Uji fungsi + regresi
         run: bash tests/test.sh
+      - name: Uji alur utama (dry-run)
+        run: bash install.sh --dry-run --yes
+  dry-run-distro:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [archlinux:latest, fedora:latest]
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pasang dependensi
+        run: |
+          if command -v pacman >/dev/null 2>&1; then
+            pacman -Sy --noconfirm --needed curl
+          else
+            dnf install -y curl
+          fi
       - name: Uji alur utama (dry-run)
         run: bash install.sh --dry-run --yes
