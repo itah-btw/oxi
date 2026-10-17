@@ -340,7 +340,8 @@ grep -q '#1a1b26' dotfiles/alacritty/alacritty-tokyonight.toml \
     && grep -q 'color15 #c0caf5' dotfiles/kitty/kitty-tokyonight.conf \
     && grep -q 'palette = 15=#c0caf5' dotfiles/ghostty/config-tokyonight \
     && ok "nilai tema tokyonight konsisten" || ng "nilai tema tokyonight konsisten"
-grep -q "alacritty" bin/oxt && grep -q "USR1" bin/oxt && grep -q "ghostty" bin/oxt \
+grep -q "alacritty" bin/oxwm-theme && grep -q "USR1" bin/oxwm-theme && grep -q "ghostty" bin/oxwm-theme \
+    && grep -q "exec oxwm-theme" bin/oxt \
     && ok "oxt hook 3 terminal" || ng "oxt hook 3 terminal"
 # Menu sesi dilewati bila DM ada (pakai DM), muncul bila tidak ada.
 DISTRO=arch; DRY_RUN=1; SESSION_REQ=""; SESSION_SET=0

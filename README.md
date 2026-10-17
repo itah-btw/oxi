@@ -177,8 +177,8 @@ lalu me-reload oxwm (reload manual dengan `Super+Shift+R` bila tak ada X).
 ```
 oxwm-installer/
 ├── install.sh                       # script utama (--dry-run/--yes/--rebuild/--latest/--uninstall/--self-update/--check/--terminal/--dm/--session/dll - lihat --help)
-├── bin/oxt                        # perintah ganti tema (terpasang ke /usr/local/bin)
-├── bin/oxwm-theme                  # alias ke oxt
+├── bin/oxwm-theme                  # perintah ganti tema (terpasang ke /usr/local/bin)
+├── bin/oxt                        # alias ke oxwm-theme
 ├── bin/oxu, bin/oxwm-update        # perintah pembaruan mandiri (terpasang ke /usr/local/bin)
 ├── bin/dmenu_run, bin/dmenu-themed # dmenu bertema (terpasang ke /usr/local/bin)
 ├── bin/dunst                       # dunst bertema (terpasang ke /usr/local/bin)
