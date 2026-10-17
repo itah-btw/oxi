@@ -857,7 +857,7 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
              "$dest_home/.config/kitty" "$dest_home/.config/ghostty" \
              "$dest_home/.calendars" \
              "$dest_home/.xinitrc" "$backup"; do
-        [[ -e "$p" ]] && chown -R "$owner:$owner" "$p" 2>/dev/null || true
+        if [[ -e "$p" ]]; then chown -R "$owner:$owner" "$p" 2>/dev/null || true; fi
     done
     tahap "dotfiles" "ok" "backup: $backup"
 }
@@ -1051,7 +1051,7 @@ enable_hw_services() { # $1=owner - layanan audio/bt/jaringan/daya + grup perang
     done
     systemctl --global enable pipewire.socket pipewire-pulse.socket 2>/dev/null || true
     for g in audio video input bluetooth; do
-        getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$owner" 2>/dev/null || true
+        if getent group "$g" >/dev/null 2>&1; then usermod -aG "$g" "$owner" 2>/dev/null || true; fi
     done
 }
 

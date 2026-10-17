@@ -2,9 +2,10 @@
 # Uji fungsi oxwm-installer: sintaks + fungsi murni + regresi. Tidak menyentuh
 # sistem (bindir/state di-override ke dir temp), tidak butuh root.
 # Jalan dari akar repo: bash tests/test.sh
-# shellcheck disable=SC2015,SC1091,SC2329
+# shellcheck disable=SC2015,SC1091,SC2317,SC2329
 # SC2015: idiom "A && ok || ng" disengaja (ok/ng tak pernah gagal).
-# SC1091/SC2329: source tak ikut -x; flaky dipanggil lintas fungsi (retry).
+# SC1091/SC2317/SC2329: source tak ikut -x; flaky dipanggil lintas fungsi
+# (retry) - SC2317=shellcheck <=0.9, SC2329=>=0.10.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
