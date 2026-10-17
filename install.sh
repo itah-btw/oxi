@@ -95,6 +95,14 @@ cleanup_tmpdirs() {
         rm -rf "${TMPDIRS[@]}" 2>/dev/null || true
     fi
 }
+# mktemp -d menghasilkan direktori mode 700 milik root; langkah build yang
+# turun ke SUDO_USER via su (clone repo oxwm/st) tak bisa menulis ke dalamnya.
+# Serahkan kepemilikan dulu sebelum dipakai.
+prepare_user_tmpdir() {
+    local d="$1" owner="${SUDO_USER:-}"
+    [[ -n "$owner" ]] || return 0
+    chown "$owner" "$d" || die "gagal chown '$d' ke '$owner'"
+}
 
 # Tolak instalasi paralel (dua terminal/dua sesi tabrakan di
 # /usr/local/bin, drop-in getty, dst). Non-blokir: langsung gagal.
@@ -574,6 +582,7 @@ install_oxwm() { # biner repo bila ada (cepat), fallback: bangun dari source
     # Clone sebagai pemilik repo agar tak kena dubious ownership bila
     # SUDO_USER terlibat.
     if [[ -n "${SUDO_USER:-}" ]]; then
+        prepare_user_tmpdir "$tmp"
         su "$SUDO_USER" -c "git clone --depth 1 '$OXWM_REPO' '$build_dir'"
         if [[ -n "$OXWM_PIN" ]]; then
             su "$SUDO_USER" -c "git -C '$build_dir' fetch --depth 1 origin '$OXWM_PIN' && git -C '$build_dir' checkout -q '$OXWM_PIN'"
@@ -651,6 +660,7 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
     tmp="$(new_tmpdir)"
     build_dir="$tmp/st-build"
     if [[ -n "${SUDO_USER:-}" ]]; then
+        prepare_user_tmpdir "$tmp"
         su "$SUDO_USER" -c "git clone --depth 1 '$repo' '$build_dir'"
     else
         git clone --depth 1 "$repo" "$build_dir"
@@ -859,6 +869,14 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
              "$dest_home/.xinitrc" "$backup"; do
         if [[ -e "$p" ]]; then chown -R "$owner:$owner" "$p" 2>/dev/null || true; fi
     done
+    # Dir pembungkus yang dibuat root (mis. ~/.config saat belum ada) harus ikut
+    # milik user, tanpa -R agar isi lama yang sudah benar tak tersentuh:
+    # ~/.config root-owned bikin user tak bisa bikin config baru; ~/.local/share
+    # root-owned malah membuat Xorg rootless gagal start saat autologin+startx
+    # ("Cannot open log file .../.local/share/xorg/Xorg.0.log").
+    for p in "$dest_home/.config" "$dest_home/.local" "$dest_home/.local/share"; do
+        if [[ -e "$p" ]]; then chown "$owner:$owner" "$p" 2>/dev/null || true; fi
+    done
     tahap "dotfiles" "ok" "backup: $backup"
 }
 
@@ -1065,9 +1083,11 @@ setup_autologin() { # $1=owner - drop-in getty berpenanda (aman dihapus bila pin
 ExecStart=
 ExecStart=-/sbin/agetty --autologin $owner --noclear %I \$TERM
 EOF
-    if systemd_running; then
+    # daemon-reload butuh root; sebagai non-root polkit tanpa agen (ssh/CI)
+    # bisa menggantung lama - lewati saja, drop-in tetap aktif saat boot.
+    if [[ "$EUID" -eq 0 ]] && systemd_running; then
         systemctl daemon-reload 2>/dev/null || log "peringatan: daemon-reload gagal (lanjut tanpa reload)"
-    else
+    elif ! systemd_running; then
         log "peringatan: systemd tak jalan (container/chroot?) - drop-in tertulis, aktif saat boot normal"
     fi
 }
@@ -1079,7 +1099,8 @@ remove_autologin() { # hapus drop-in HANYA bila buatan kita (berpenanda); config
     if grep -q "oxwm-installer" "$dropin" 2>/dev/null; then
         rm -f "$dropin"
         log "autologin tty1 buatan installer dihapus ($dropin)"
-        if systemd_running; then
+        # lihat catatan di setup_autologin: reload hanya sebagai root
+        if [[ "$EUID" -eq 0 ]] && systemd_running; then
             systemctl daemon-reload 2>/dev/null || true
         fi
     else
@@ -1288,7 +1309,7 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
         log "font JetBrainsMono Nerd sudah mutakhir ($NERDFONT_VERSION)"
         return 0
     fi
-    local target arsip tmp
+    local target arsip tmp data_dir
     target="$(user_home "$owner")/.local/share/fonts"
     log "font Nerd belum ada -> unduh JetBrainsMono $NERDFONT_VERSION (terpin) ke $target"
     tahap "font" "mulai" "JetBrainsMono $NERDFONT_VERSION (tar.xz)"
@@ -1298,6 +1319,11 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
         tmp="$(new_tmpdir)"
         arsip="$tmp/JetBrainsMono.tar.xz"
         mkdir -p "$target"
+        # mkdir -p sebagai root meninggalkan ~/.local dan ~/.local/share milik
+        # root; Xorg rootless (autologin+startx) perlu menulis
+        # ~/.local/share/xorg. Kembalikan dir pembungkusnya (tanpa -R).
+        data_dir="$(dirname "$target")"
+        chown "$owner:$owner" "$data_dir" "$(dirname "$data_dir")" 2>/dev/null || true
         curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
             "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
             -o "$arsip" || die "unduhan font gagal"

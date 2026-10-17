@@ -414,5 +414,42 @@ code=0
 [[ "$code" -ne 0 ]] && ok "lock tolak instalasi paralel" || ng "lock tolak instalasi paralel"
 unset OXWM_LOCK_FILE
 
+# 28. Clone via su (modul oxwm + st): tmpdir root wajib diserahkan ke SUDO_USER
+# dulu - regresi "could not create work tree dir ... Permission denied".
+# shellcheck disable=SC2016
+c=$(grep -FB4 'su "$SUDO_USER" -c "git clone' install.sh | grep -cF 'prepare_user_tmpdir "$tmp"')
+[[ "$c" -eq 2 ]] && ok "tmpdir diserahkan ke SUDO_USER sebelum clone su" \
+    || ng "tmpdir diserahkan ke SUDO_USER sebelum clone su ($c/2)"
+
+# 29. Dir pembungkus home yang dibuat root harus dikembalikan ke user -
+# regresi Xorg rootless "Cannot open log file ~/.local/share/xorg/Xorg.0.log"
+# (autologin+startx gagal) dan ~/.config root-owned.
+# shellcheck disable=SC2016
+grep -qF 'for p in "$dest_home/.config" "$dest_home/.local" "$dest_home/.local/share"; do' install.sh \
+    && ok "deploy: dir pembungkus .config/.local milik user" \
+    || ng "deploy: dir pembungkus .config/.local milik user"
+# shellcheck disable=SC2016
+grep -q 'chown "\$owner:\$owner" "\$data_dir" "$(dirname "$data_dir")"' install.sh \
+    && ok "font: rantai .local milik user" \
+    || ng "font: rantai .local milik user"
+
+# 30. Blok bar bluetooth tak boleh menggantungkan event loop oxwm -
+# regresi: bluetoothctl tanpa bluetoothd menggantung; blok shell dieksekusi
+# sinkron saat startup sehingga WM membeku (window baru tetap IsUnMapped).
+grep -q 'pgrep -x bluetoothd' dotfiles/oxwm/bluetooth-status.sh \
+    && grep -q 'timeout 2 bluetoothctl show' dotfiles/oxwm/bluetooth-status.sh \
+    && ok "bluetooth-status.sh: guard daemon + timeout" \
+    || ng "bluetooth-status.sh: guard daemon + timeout"
+c=$(grep -o 'timeout 2 bluetoothctl' dotfiles/oxwm/config.lua | wc -l)
+[[ "$c" -eq 3 ]] && ok "keybind XF86Bluetooth semua pakai timeout" \
+    || ng "keybind XF86Bluetooth semua pakai timeout ($c/3)"
+
+# 31. daemon-reload autologin hanya sebagai root - regresi gantung non-root
+# (polkit tanpa agen di ssh/CI menunggu selamanya).
+# shellcheck disable=SC2016
+c=$(grep -cF '[[ "$EUID" -eq 0 ]] && systemd_running' install.sh)
+[[ "$c" -eq 2 ]] && ok "daemon-reload autologin hanya sebagai root" \
+    || ng "daemon-reload autologin hanya sebagai root ($c/2)"
+
 if [[ "$fail" -eq 0 ]]; then echo "SEMUA UJI LOLOS"; else echo "ADA UJI GAGAL"; fi
 exit "$fail"
