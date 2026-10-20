@@ -6,6 +6,19 @@
 set -eu
 REPO_SLUG="${OXWM_REPO_SLUG:-itah-btw/oxwm-installer}"
 REF="${OXWM_REF:-main}"
+action=self-update
+latest=0
+yes=0
+for arg in "$@"; do
+    case "$arg" in
+        --check) action=check ;;
+        --latest) latest=1 ;;
+        --yes) yes=1 ;;
+        *) echo "opsi tidak dikenal: $arg (pakai: oxu [--check] [--latest] [--yes])" >&2; exit 2 ;;
+    esac
+done
+# Installer tidak lagi memakai flag; mode dipilih lewat environment internal.
 # shellcheck disable=SC2086
 exec curl -fsSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
-    "https://raw.githubusercontent.com/${REPO_SLUG}/${REF}/install.sh" | sudo bash -s -- --self-update "$@"
+    "https://raw.githubusercontent.com/${REPO_SLUG}/${REF}/install.sh" \
+    | sudo env OXWM_ACTION="$action" OXWM_LATEST="$latest" OXWM_YES="$yes" bash

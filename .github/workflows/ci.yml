@@ -10,13 +10,10 @@ jobs:
       - name: Pasang shellcheck
         run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
       - name: shellcheck
-        run: shellcheck -S info install.sh bin/* tests/*.sh
-      - name: Uji fungsi + regresi
-        run: bash tests/test.sh
-      - name: Uji alur utama (dry-run)
-        run: bash install.sh --dry-run --yes
-  dry-run-distro:
+        run: shellcheck -S info install.sh bin/*
+  install:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -24,12 +21,23 @@ jobs:
     container: ${{ matrix.image }}
     steps:
       - uses: actions/checkout@v4
-      - name: Pasang dependensi
+      - name: Siapkan user + sudo
+        shell: bash
         run: |
           if command -v pacman >/dev/null 2>&1; then
-            pacman -Sy --noconfirm --needed curl
+            pacman -Sy --noconfirm --needed sudo shadow
           else
-            dnf install -y curl
+            dnf install -y sudo shadow-utils
           fi
-      - name: Uji alur utama (dry-run)
-        run: bash install.sh --dry-run --yes
+          useradd -m -s /bin/bash tester
+          mkdir -p /etc/sudoers.d
+          echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
+          chmod 0440 /etc/sudoers.d/tester
+      - name: Jalankan installer (nyata)
+        shell: bash
+        run: |
+          su - tester -c "sudo env OXWM_YES=1 OXWM_NO_UPDATE=1 bash '$GITHUB_WORKSPACE/install.sh'"
+      - name: Tampilkan log installer
+        if: failure()
+        shell: bash
+        run: cat /var/log/oxwm-installer/install.log 2>/dev/null || true

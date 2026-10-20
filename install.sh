@@ -2,7 +2,7 @@
 #
 # oxwm-installer - instalasi otomatis window manager OXWM.
 # Didukung: Arch Linux (pacman), Debian/Ubuntu (apt), Fedora (dnf).
-# Cara pakai: sudo ./install.sh [--dry-run] [--yes] [--rebuild] [--theme NAMA] [--help]
+# Cara pakai: sudo ./install.sh   (tanpa flag; semua pilihan lewat menu)
 #
 # Alur: siapkan log -> cek root -> deteksi distro -> konfirmasi ->
 #       update sistem -> instal paket (nama dipetakan per distro) ->
@@ -18,25 +18,20 @@ set -Eeuo pipefail
 
 LOG_FILE="install.log"  # ditimpa init_log() ke path tetap bila bisa ditulis
 VERSION="1.2.0"
-DRY_RUN=0
-ASSUME_YES=0
-REBUILD=0
-LATEST=0            # --latest: OXWM dari HEAD terbaru (default: pin teruji)
-NO_UPDATE=0         # --no-update: lewati upgrade sistem
-UNINSTALL=0         # --uninstall: hapus yang dipasang installer
-SELF_UPDATE=0       # --self-update: bangun ulang hanya komponen outdated (oxu)
-CHECK_ONLY=0        # --check: laporkan versi komponen, tanpa mengubah apa pun
-SESSION_REQ="auto"  # auto|autologin|manual|dm:NAMA
-SESSION_SET=0       # 1 bila sesi ditentukan via flag
+ASSUME_YES="${OXWM_YES:-0}"      # internal/otomasi
+REBUILD="${OXWM_REBUILD:-0}"     # internal: bangun ulang walau biner ada
+LATEST="${OXWM_LATEST:-0}"       # internal: OXWM dari HEAD terbaru
+NO_UPDATE="${OXWM_NO_UPDATE:-0}" # internal: lewati upgrade sistem
+ACTION="${OXWM_ACTION:-install}" # internal: install|uninstall|self-update|check
+UNINSTALL=0
+SELF_UPDATE=0
+CHECK_ONLY=0
+SESSION_REQ="auto"  # auto|autologin|dm:NAMA
 TERMINAL="st"       # terminal bawaan (st|alacritty|kitty|ghostty)
-TERMINAL_SET=0      # 1 bila --terminal eksplisit
 OLD_DM=""           # DM terdeteksi sebelum diubah (untuk disable yang lama)
-FORCE_AUTOLOGIN=0   # --force-autologin: autologin tty1 walau ada display manager
-NO_AUTOLOGIN=0      # --no-autologin: jangan sentuh getty/startx (DM/manual saja)
 THEME="tokyonight"
-THEME_SET=0
 DISTRO=""
-SESSION_MODE=""     # diisi enable_services(): dm:<nama> | autologin | manual
+SESSION_MODE=""     # diisi enable_services(): dm:<nama> | autologin
 DM_CANDIDATES=(lightdm gdm gdm3 sddm lxdm slim xdm ly greetd emptty lemurs)
 ZIG_VERSION="0.16.0"          # TERPIN: oxwm HEAD butuh zig 0.16.x (build.zig pakai b.args yang dihapus di zig 0.17)
 ZIG_SHA256="70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00" # sha256 zig-x86_64-linux-0.16.0.tar.xz resmi (terverifikasi dari unduhan langsung)
@@ -48,7 +43,7 @@ NERDFONT_SHA256="04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010c
 # selalu latest dari repo saat instalasi berjalan - pin tak mengubah itu.
 OXWM_REPO="https://github.com/tonybanters/oxwm"
 OXWM_PIN_DEFAULT="472c76753fed1e1430014328237da1db053bbb64" # komit teruji 2026-10-07 (merge PR #258)
-# Default reproduksibel (pin); HEAD terbaru hanya bila: --latest, OXWM_PIN=""
+# Default reproduksibel (pin); HEAD terbaru hanya bila: OXWM_LATEST=1, OXWM_PIN=""
 # eksplisit, atau OXWM_PIN=<40-heksa lain>. Bedakan "tak diset" (-) dari
 # "dikosongkan" (:-) agar override kosong tetap berarti HEAD.
 OXWM_PIN="${OXWM_PIN-$OXWM_PIN_DEFAULT}"
@@ -64,12 +59,7 @@ on_err() { # $1=kode $2=perintah $3=baris - catat kegagalan tak terduga (set -e)
     log "ERROR: keluar kode $1 di baris ${3:-?}: ${2:-?}"
 }
 tahap() { # $1=tahap $2=status $3=pesan - riwayat tahap ke berkas log
-    # Status "ok" untuk langkah yang dilewati (dry-run) adalah dusta.
-    if [[ "$DRY_RUN" -eq 1 && "$2" == "ok" ]]; then
-        log "(dry-run) [$1] dilewati: $3"
-    else
-        log "[$1] $2: $3"
-    fi
+    log "[$1] $2: $3"
 }
 valid_user() { [[ "${1:-}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; } # nama user Linux yang waras
 
@@ -113,23 +103,21 @@ acquire_lock() {
     log "lock terkunci: $lock"
 }
 
-pipe_grace() { # jeda persetujuan di mode pipe tanpa --yes (batal via Ctrl-C)
-    local grace="${OXWM_PIPE_GRACE:-5}"
-    [[ "$grace" =~ ^[0-9]+$ ]] || grace=5
-    [[ "$grace" -eq 0 ]] && return 0
-    echo "Mode pipe tanpa --yes: lanjut otomatis dalam $grace detik (Ctrl-C untuk batal)..." >&2
-    local i
-    for ((i = grace; i > 0; i--)); do
-        echo "  lanjut dalam $i..." >&2
-        sleep 1
-    done
+ask_confirm() { # $1=pertanyaan; 0 bila pengguna menjawab y/Y
+    local jawab=""
+    if [[ -t 0 ]]; then
+        read -rp "$1 [y/N] " jawab
+    elif { exec 3</dev/tty; } 2>/dev/null; then
+        read -rp "$1 [y/N] " jawab <&3
+        exec 3<&-
+    else
+        die "konfirmasi butuh terminal; untuk otomasi set OXWM_YES=1"
+    fi
+    [[ "$jawab" == "y" || "$jawab" == "Y" ]]
 }
 
 # --- Log: path tetap, bukan cwd acak tempat sudo dijalankan ---
 init_log() {
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        return 0
-    fi
     local dir="${OXWM_LOG_DIR:-/var/log/oxwm-installer}"
     if mkdir -p "$dir" 2>/dev/null && touch "$dir/install.log" 2>/dev/null; then
         LOG_FILE="$dir/install.log"
@@ -179,70 +167,8 @@ user_home() { # $1=user -> cetak $HOME-nya atau gagal
     printf '%s' "$h"
 }
 
-usage() {
-    cat <<'EOF'
-Pakai: sudo ./install.sh [OPSI]
-
-Satu baris (cukup ini saja - semua tema ikut terpasang; tanpa flag tema pun
-tokyonight/gruvbox/catppuccin semuanya terinstal, tinggal ganti kapan saja
-dengan `oxwm-theme` setelah login):
-  curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash
-
-Distro didukung: Arch Linux, Debian/Ubuntu, Fedora (terdeteksi otomatis).
-
-Sesi OXWM (otomatis): bila display manager terdeteksi (lightdm/gdm/sddm/
-lxdm/slim/xdm/ly/greetd/dll) maka DM dipakai + OXWM didaftarkan sebagai
-sesi; bila tidak ada DM maka autologin getty di tty1 + startx otomatis.
-
-  --dry-run   simulasi saja: tampilkan rencana tanpa mengubah sistem
-              (tidak butuh sudo)
-  --yes       lewati konfirmasi (untuk otomatisasi; di mode pipe gantikan
-              masa tenggang 5 detik)
-  --rebuild   bangun ulang oxwm + st walau binernya sudah ada
-  --latest    bangun OXWM dari HEAD terbaru. Default: pin ke komit teruji
-              472c7675 (reproduksibel; timpa via OXWM_PIN=<40-heksa>/"" )
-  --no-update lewati upgrade sistem (langsung instal paket)
-  --uninstall hapus biner + oxu + sesi buatan installer (dotfiles dibiarkan)
-  --self-update
-              bangun ulang hanya komponen yang outdated (perintah: oxu).
-              Tanpa upgrade sistem/paket dan tanpa utak-atik sesi
-  --check     laporkan versi komponen vs pin/HEAD, tanpa mengubah apa pun
-  --session auto|autologin
-              sesi login (default: otomatis bila ada DM, tanya bila belum ada)
-  --dm sddm|gdm|lightdm
-              pasang DM itu + jadikan pintu login (DM lama dimatikan)
-  --terminal st|alacritty|kitty|ghostty
-              terminal bawaan (default: st 3 tema; lainnya dari repo)
-  --force-autologin
-              paksa autologin tty1 + startx walau ada display manager
-  --no-autologin
-              jangan sentuh getty/startx (untuk login manual atau
-              display manager yang dipasang belakangan)
-  --theme NAMA
-              tema aktif awal: tokyonight (bawaan) | gruvbox | catppuccin.
-              Ketiga tema SELALU dipasang (st 3 varian, palet, wallpaper,
-              dunstrc per tema); flag ini hanya memilih mana yang aktif.
-              Tanpa flag ini file tema yang sudah ada tidak diubah.
-              Bentuk --theme=gruvbox juga diterima.
-  --version   tampilkan versi installer
-  --help      tampilkan bantuan ini
-
-Contoh:
-  ./install.sh --dry-run   # lihat rencana dulu (aman)
-  sudo ./install.sh        # instalasi penuh (semua tema ikut)
-  sudo ./install.sh --no-update --yes  # tanpa upgrade sistem
-  sudo ./install.sh --uninstall --yes  # hapus instalasi
-  oxu                    # perbarui komponen yang outdated (butuh instal ulang sekali agar oxu ada)
-  oxu --check            # cek saja, tanpa root pun bisa
-  oxwm-theme gruvbox       # ganti tema kapan saja, tanpa instal ulang
-EOF
-}
 
 check_root() {
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati cek root"
-        return 0
-    fi
     [[ "$EUID" -eq 0 ]] || die "jalankan dengan sudo: sudo ./install.sh"
     [[ -n "${SUDO_USER:-}" ]] || die "jalankan via sudo dari user biasa (bukan langsung sebagai root)"
     valid_user "$SUDO_USER" || die "SUDO_USER tidak valid: '$SUDO_USER'"
@@ -341,32 +267,22 @@ detect_distro() {
 }
 
 confirm() {
-    if [[ "$DRY_RUN" -eq 1 || "$ASSUME_YES" -eq 1 ]]; then
-        log "konfirmasi dilewati (dry-run/--yes)"
+    if [[ "$ASSUME_YES" -eq 1 ]]; then
+        log "konfirmasi dilewati (OXWM_YES)"
         return 0
     fi
-    # Mode pipe (curl ... | sudo bash): stdin adalah scriptnya, tak bisa
-    # ditanya - tampilkan ringkasan + masa tenggang sebelum lanjut.
-    if [[ ! -t 0 ]]; then
-        echo "Ringkasan: instal OXWM (build dari source) + aplikasi pendukung + dotfiles standar (topbar, keybind, SEMUA tema: tokyonight/gruvbox/catppuccin + dmenu/dunst bertema; tema aktif: $THEME, bisa diganti kapan saja via oxwm-theme) di $DISTRO. Sesi: $SESSION_REQ. Terminal: $TERMINAL." >&2
-        pipe_grace
-        ASSUME_YES=1
-        log "mode pipe: lanjut setelah masa tenggang"
-        return 0
-    fi
-    echo "Ringkasan: instal OXWM (build dari source) + aplikasi pendukung + dotfiles standar (topbar, keybind, SEMUA tema: tokyonight/gruvbox/catppuccin + dmenu/dunst bertema; tema aktif: $THEME, bisa diganti kapan saja via oxwm-theme) di $DISTRO. Sesi: $SESSION_REQ. Terminal: $TERMINAL."
-    read -rp "Lanjut? [y/N] " jawab
-    [[ "$jawab" == "y" || "$jawab" == "Y" ]] || { tahap "konfirmasi" "dibatalkan" "pengguna menjawab tidak"; die "dibatalkan pengguna"; }
-    tahap "konfirmasi" "ok" "pengguna menyetujui"
-}
-
-run_or_dry() { # "$@" = perintah; dry-run hanya mencetak
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) $*"
+    local ringkasan="Ringkasan: instal OXWM (build dari source) + aplikasi pendukung + dotfiles standar (topbar, keybind, SEMUA tema: tokyonight/gruvbox/catppuccin + dmenu/dunst bertema; tema aktif: $THEME, bisa diganti kapan saja via oxt) di $DISTRO. Sesi: $SESSION_REQ. Terminal: $TERMINAL."
+    local peringatan="PERINGATAN: installer akan mengubah sistem (paket, /usr/local/bin, dotfiles login)."
+    if [[ -t 0 ]]; then
+        echo "$ringkasan"
+        echo "$peringatan"
     else
-        log "jalankan: $*"
-        "$@"
+        echo "$ringkasan" >&2
+        echo "$peringatan" >&2
     fi
+    ask_confirm "Lanjut?" \
+        || { tahap "konfirmasi" "dibatalkan" "pengguna menjawab tidak"; die "dibatalkan pengguna"; }
+    tahap "konfirmasi" "ok" "pengguna menyetujui"
 }
 
 retry() { # $1=maksimal coba, sisanya perintah; mirror kadang tersendat
@@ -387,15 +303,15 @@ retry() { # $1=maksimal coba, sisanya perintah; mirror kadang tersendat
 
 system_update() {
     if [[ "$NO_UPDATE" -eq 1 ]]; then
-        log "update sistem dilewati (--no-update)"
-        tahap "update" "dilewati" "--no-update"
+        log "update sistem dilewati (OXWM_NO_UPDATE=1)"
+        tahap "update" "dilewati" "OXWM_NO_UPDATE=1"
         return 0
     fi
     log "update sistem..."
     tahap "update" "mulai" "${UPDATE[*]}"
-    run_or_dry retry 3 "${UPDATE[@]}"
+    retry 3 "${UPDATE[@]}"
     if [[ -n "${UPDATE2[*]:-}" ]]; then
-        run_or_dry retry 3 "${UPDATE2[@]}"
+        retry 3 "${UPDATE2[@]}"
     fi
     tahap "update" "ok" "sistem mutakhir"
 }
@@ -413,11 +329,7 @@ install_packages() {
     done
     log "instal ${#pkgs[@]} paket: ${pkgs[*]}"
     tahap "paket" "mulai" "${pkgs[*]}"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati instalasi paket"
-    else
-        retry 3 "${INSTALL[@]}" "${pkgs[@]}"
-    fi
+    retry 3 "${INSTALL[@]}" "${pkgs[@]}"
     tahap "paket" "ok" "selesai"
 }
 
@@ -427,12 +339,8 @@ ensure_fastfetch() { # semua distro; Debian lama tanpa paket resmi -> fallback .
         # memperbaiki fastfetch yang terhapus (check_updates menandainya).
         if ! command -v fastfetch >/dev/null 2>&1; then
             tahap "fastfetch" "mulai" "instal dari repo"
-            if [[ "$DRY_RUN" -eq 1 ]]; then
-                log "(dry-run) lewati fastfetch (repo)"
-            else
-                retry 3 "${INSTALL[@]}" fastfetch || die "pemasangan fastfetch gagal"
-                command -v fastfetch >/dev/null || die "fastfetch tak ketemu setelah dipasang"
-            fi
+            retry 3 "${INSTALL[@]}" fastfetch || die "pemasangan fastfetch gagal"
+            command -v fastfetch >/dev/null || die "fastfetch tak ketemu setelah dipasang"
             tahap "fastfetch" "ok" "terpasang (repo)"
         fi
         return 0
@@ -453,10 +361,6 @@ ensure_fastfetch() { # semua distro; Debian lama tanpa paket resmi -> fallback .
         log "fastfetch ${inst:-tak-dikenal} < pin $FASTFETCH_VERSION -> cek repo"
     fi
     tahap "fastfetch" "mulai" "cek repo / fallback .deb upstream"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati fastfetch (.deb upstream bila repo tak punya)"
-        return 0
-    fi
     # Tampung dulu stdout-nya: grep -q langsung di pipa rawan SIGPIPE
     # (penulis mati lebih dulu -> pipefail gagal -> cabang salah).
     local tmp deb policy now
@@ -495,10 +399,6 @@ ensure_zig() { # pastikan compiler zig seri 0.16.x ada (yang didukung oxwm); kal
         log "zig sistem ($zv) di luar seri 0.16.x -> pasang tarball $ZIG_VERSION"
     fi
     tahap "zig" "mulai" "tarball $ZIG_VERSION"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati unduhan zig"
-        return 0
-    fi
     local arsip tmp
     tmp="$(new_tmpdir)"
     arsip="$tmp/zig.tar.xz"
@@ -535,10 +435,6 @@ install_oxwm_binary() { # 0 bila biner repo terpasang; 1 bila tak tersedia
         return 0
     fi
     tahap "oxwm" "mulai" "biner repo $pkg"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) ${INSTALL[*]} $pkg"
-        return 0
-    fi
     retry 3 "${INSTALL[@]}" "$pkg" || return 1
     command -v oxwm >/dev/null || return 1
     log "oxwm terpasang dari repo ($pkg) - tanpa compile"
@@ -548,25 +444,16 @@ install_oxwm_binary() { # 0 bila biner repo terpasang; 1 bila tak tersedia
 
 install_oxwm() { # biner repo bila ada (cepat), fallback: bangun dari source
     if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/oxwm ]]; then
-        log "oxwm sudah terpasang, lewati (pakai --rebuild untuk bangun ulang)"
+        log "oxwm sudah terpasang, lewati (pakai OXWM_REBUILD=1 untuk bangun ulang)"
         return 0
     fi
-    # OXWM_PIN bisa ditimpa via environment (--latest atau OXWM_PIN="" = HEAD
+    # OXWM_PIN bisa ditimpa via environment (OXWM_LATEST=1 atau OXWM_PIN="" = HEAD
     # terbaru): validasi sebelum dipakai di dalam `su -c "..."` (injeksi shell
     # berjalan sebagai user target). Default: pin teruji (reproduksibel).
     if [[ -n "$OXWM_PIN" ]]; then
         [[ "$OXWM_PIN" =~ ^[0-9a-f]{40}$ ]] || die "OXWM_PIN tidak valid (harus SHA-1 40 digit heksa; kosongkan untuk HEAD terbaru)"
     fi
     [[ "$OXWM_REPO" != *"'"* ]] || die "repo mengandung kutip tunggal"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        if [[ -n "${OXWM_BINPKG[$DISTRO]:-}" ]]; then
-            log "(dry-run) coba biner repo dulu, fallback build source"
-        else
-            log "(dry-run) lewati clone + build oxwm (pin ${OXWM_PIN:-HEAD})"
-        fi
-        tahap "oxwm" "ok" "terpasang di /usr/local/bin/oxwm"
-        return 0
-    fi
     # Jalur cepat: biner resmi (sekaligus lewati zig - hanya perlu untuk build).
     if install_oxwm_binary; then
         return 0
@@ -644,18 +531,14 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
     # tak bisa ganti warna saat runtime, jadi 3 varian tema mustahil;
     # build-nya pun hanya hitungan detik (satu file C, -j paralel).
     local repo="https://git.suckless.org/st"
-    if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/st-tokyonight && -x /usr/local/bin/st-gruvbox && -x /usr/local/bin/st-catppuccin ]]; then
-        log "st 3 tema sudah terpasang, lewati (pakai --rebuild untuk bangun ulang)"
+    if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/st && -x /usr/local/bin/st-tokyonight && -x /usr/local/bin/st-gruvbox && -x /usr/local/bin/st-catppuccin ]]; then
+        log "st 3 tema sudah terpasang, lewati (pakai OXWM_REBUILD=1 untuk bangun ulang)"
         return 0
     fi
     local jobs; jobs="$(nproc 2>/dev/null || echo 1)"
     local theme fg bg cur c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
     log "bangun & pasang st 3 tema dari source ($repo)..."
     tahap "st" "mulai" "make 3 tema"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati clone + build st"
-        return 0
-    fi
     local tmp build_dir orig
     tmp="$(new_tmpdir)"
     build_dir="$tmp/st-build"
@@ -749,15 +632,11 @@ EOF
 install_helpers() { # perintah pendamping (oxwm-theme, dmenu, dunst bertema) ke /usr/local/bin
     log "pasang perintah pendamping..."
     tahap "helpers" "mulai" "bin/*"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) tulis /usr/local/bin dari $REPO_DIR/bin/*"
-    else
-        local f
-        for f in "$REPO_DIR"/bin/*; do
-            [[ -f "$f" ]] || continue
-            install -m 0755 "$f" "/usr/local/bin/$(basename "$f")"
-        done
-    fi
+    local f
+    for f in "$REPO_DIR"/bin/*; do
+        [[ -f "$f" ]] || continue
+        install -m 0755 "$f" "/usr/local/bin/$(basename "$f")"
+    done
     tahap "helpers" "ok" "perintah pendamping terpasang"
 }
 
@@ -791,10 +670,6 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
     local owner="${SUDO_USER:-$(whoami)}"
     log "deploy dotfiles $src_dir -> $dest_home"
     tahap "dotfiles" "mulai" "$src_dir"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati penyalinan dotfiles"
-        return 0
-    fi
     local backup
     backup="$dest_home/.config-backup-$(date +%F-%H%M%S)"
     local n=0
@@ -846,9 +721,9 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
         cp "$tf" "$live"
         log "config $TERMINAL awal: tema $live_theme"
     fi
-    if [[ "$THEME_SET" -eq 1 || ! -f "$dest_home/.config/oxwm/theme" ]]; then
+    if [[ ! -f "$dest_home/.config/oxwm/theme" ]]; then
         echo "$THEME" > "$dest_home/.config/oxwm/theme"
-        log "tema aktif: $THEME (semua tema terpasang: tokyonight gruvbox catppuccin - ganti kapan saja via oxwm-theme)"
+        log "tema aktif: $THEME (semua tema terpasang: tokyonight gruvbox catppuccin - ganti kapan saja via oxt)"
     else
         log "tema yang ada dipertahankan: $(cat "$dest_home/.config/oxwm/theme") (semua tema tetap terpasang)"
     fi
@@ -881,7 +756,7 @@ deploy_dotfiles() { # salin config standar bila pengguna belum punya
 }
 
 # --- Pilihan interaktif (menu bernomor + deskripsi singkat) ---
-# Semua menu punya default aman = perilaku lama; mode pipe/dry-run/--yes
+# Semua menu punya default aman = perilaku lama; mode pipe/OXWM_YES
 # otomatis pakai default tanpa bertanya (stdin bukan tty).
 match_choice() { # $1=jawaban $2=default, sisanya "value|..." -> echo value / gagal
     local ans="${1,,}" def="$2"
@@ -905,8 +780,8 @@ match_choice() { # $1=jawaban $2=default, sisanya "value|..." -> echo value / ga
 prompt_choice() { # $1=judul $2=default, sisanya "value|Label|deskripsi" -> echo value
     local title="$1" def="$2"
     shift 2
-    # Jangan pernah blok: dry-run/--yes/otomatis/pipe langsung default.
-    if [[ "$DRY_RUN" -eq 1 || "$ASSUME_YES" -eq 1 || "${OXWM_MENU_AUTO:-0}" -eq 1 ]] || [[ ! -t 0 ]]; then
+    # Jangan pernah blok: OXWM_YES/otomatis/pipe langsung default.
+    if [[ "$ASSUME_YES" -eq 1 || "${OXWM_MENU_AUTO:-0}" -eq 1 ]] || [[ ! -t 0 ]]; then
         echo "(otomatis) $title -> $def" >&2
         printf '%s' "$def"
         return 0
@@ -1006,7 +881,7 @@ dm_from_symlink() { # [$1=path display-manager.service] -> nama DM atau "" (tak 
     printf '%s' "$base"
 }
 
-detect_dm() { # cetak nama DM atau "" - hanya baca, aman untuk --dry-run; tak pernah gagal
+detect_dm() { # cetak nama DM atau "" - hanya baca; tak pernah gagal
     # Override untuk tes/otomatisasi: OXWM_DM diset (bahkan kosong = paksa "tak ada DM").
     if [[ "${OXWM_DM+set}" == "set" ]]; then
         printf '%s' "$OXWM_DM"
@@ -1130,15 +1005,13 @@ remove_startx_block() { # $1=profile - buang blok startx buatan kita (pindah ke 
     log "blok startx otomatis dihapus dari $profile (kini via display manager)"
 }
 
-resolve_choices() { # tentukan SESSION_REQ/TERMINAL via flag atau menu
+resolve_choices() { # tentukan SESSION_REQ/TERMINAL lewat menu
     OLD_DM="$(detect_dm)" || true
     tahap "pilihan" "mulai" "sesi/terminal"
 
-    # Sesi login: flag menang; menu hanya bila BELUM ada display manager
+    # Sesi login: menu hanya bila BELUM ada display manager
     # (bila DM sudah ada, pakai itu - perilaku lama, tanpa bertanya).
-    if [[ "${SESSION_SET:-0}" -eq 1 ]]; then
-        log "sesi: $SESSION_REQ (flag)"
-    elif [[ -n "$OLD_DM" ]]; then
+    if [[ -n "$OLD_DM" ]]; then
         SESSION_REQ="auto"
         log "DM terdeteksi ($OLD_DM): pakai DM, tanpa menu sesi"
     else
@@ -1152,23 +1025,20 @@ resolve_choices() { # tentukan SESSION_REQ/TERMINAL via flag atau menu
         done
         SESSION_REQ="$(prompt_choice "Belum ada display manager. Sesi login OXWM" autologin "${opts[@]}")"
     fi
-    if [[ "$TERMINAL_SET" -eq 1 ]]; then
-        log "terminal: $TERMINAL (flag)"
-    else
-        local topts=("st|st|Build dari source, super ringan; 3 varian warna ikut tema (oxt).") t
-        for t in alacritty kitty ghostty; do
-            if repo_has_pkg "$t"; then
-                case "$t" in
-                    alacritty) topts+=("alacritty|alacritty|GPU-accelerated, cepat; warna ikut tema (oxt), terminal baru.") ;;
-                    kitty) topts+=("kitty|kitty|GPU, fitur kaya (tab, gambar); warna ikut tema (oxt), reload otomatis.") ;;
-                    ghostty) topts+=("ghostty|ghostty|GPU modern, default bagus; warna ikut tema (oxt), reload otomatis.") ;;
-                esac
-            else
-                log "terminal $t tak ada di repo $DISTRO - disembunyikan"
-            fi
-        done
-        TERMINAL="$(prompt_choice "Terminal bawaan" st "${topts[@]}")"
-    fi
+
+    local topts=("st|st|Build dari source, super ringan; 3 varian warna ikut tema (oxt).") t
+    for t in "${TERM_KNOWN[@]:1}"; do
+        if repo_has_pkg "$t"; then
+            case "$t" in
+                alacritty) topts+=("alacritty|alacritty|GPU-accelerated, cepat; warna ikut tema (oxt), terminal baru.") ;;
+                kitty) topts+=("kitty|kitty|GPU, fitur kaya (tab, gambar); warna ikut tema (oxt), reload otomatis.") ;;
+                ghostty) topts+=("ghostty|ghostty|GPU modern, default bagus; warna ikut tema (oxt), reload otomatis.") ;;
+            esac
+        else
+            log "terminal $t tak ada di repo $DISTRO - disembunyikan"
+        fi
+    done
+    TERMINAL="$(prompt_choice "Terminal bawaan" st "${topts[@]}")"
     tahap "pilihan" "ok" "sesi=$SESSION_REQ terminal=$TERMINAL"
 }
 disable_old_dm() { # $1=unit baru/"" - matikan DM lama (tanpa --now: aman sesi jalan)
@@ -1176,11 +1046,7 @@ disable_old_dm() { # $1=unit baru/"" - matikan DM lama (tanpa --now: aman sesi j
     [[ -n "$OLD_DM" ]] && oldunit="$OLD_DM"
     [[ -n "$oldunit" && "$oldunit" != "$newunit" ]] || return 0
     log "matikan DM lama ($oldunit) - berlaku setelah reboot"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) systemctl disable $oldunit"
-    else
-        systemctl disable "$oldunit" 2>/dev/null || log "peringatan: disable $oldunit gagal"
-    fi
+    systemctl disable "$oldunit" 2>/dev/null || log "peringatan: disable $oldunit gagal"
 }
 install_session_stack() { # pasang DM pilihan + enable; matikan yang lama
     local kind="${SESSION_REQ%%:*}" name="${SESSION_REQ#*:}" unit=""
@@ -1188,13 +1054,9 @@ install_session_stack() { # pasang DM pilihan + enable; matikan yang lama
         dm)
             unit="$(dm_unit "$name")"
             tahap "sesi-pilih" "mulai" "DM $name"
-            if [[ "$DRY_RUN" -eq 1 ]]; then
-                log "(dry-run) pasang + enable DM $name"
-            else
-                retry 3 "${INSTALL[@]}" "$(dm_pkg "$name")" \
-                    || die "DM $name tak tersedia di repo $DISTRO"
-                systemctl enable "$unit" 2>/dev/null || log "peringatan: enable $unit gagal"
-            fi
+            retry 3 "${INSTALL[@]}" "$(dm_pkg "$name")" \
+                || die "DM $name tak tersedia di repo $DISTRO"
+            systemctl enable "$unit" 2>/dev/null || log "peringatan: enable $unit gagal"
             disable_old_dm "$unit"
             tahap "sesi-pilih" "ok" "DM $name" ;;
         autologin)
@@ -1205,14 +1067,6 @@ install_session_stack() { # pasang DM pilihan + enable; matikan yang lama
 }
 install_terminal_choice() { # pasang terminal pilihan (st = build 3 tema)
     tahap "terminal" "mulai" "$TERMINAL"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        if [[ "$TERMINAL" == "st" ]]; then
-            log "(dry-run) build st 3 tema dari source"
-        else
-            log "(dry-run) ${INSTALL[*]} $TERMINAL"
-        fi
-        return 0
-    fi
     if [[ "$TERMINAL" == "st" ]]; then
         build_st
     else
@@ -1237,22 +1091,6 @@ enable_services() { # jalankan OXWM: via DM bila ada, atau autologin tty1+startx
     tahap "layanan" "mulai" "sesi OXWM"
     local dm=""
     dm="$(detect_dm)" || true
-    if [[ "$FORCE_AUTOLOGIN" -eq 1 ]]; then
-        [[ -n "$dm" ]] && log "--force-autologin: abaikan DM terdeteksi ($dm)"
-        dm=""
-    fi
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) pasang $(xsession_file)"
-        if [[ -n "$dm" ]]; then
-            log "(dry-run) DM terdeteksi ($dm): pakai DM, tanpa autologin"
-        elif [[ "$NO_AUTOLOGIN" -eq 1 ]]; then
-            log "(dry-run) tanpa DM + --no-autologin: lewati getty/startx (login manual)"
-        else
-            log "(dry-run) tanpa DM: autologin tty1 + startx otomatis"
-        fi
-        return 0
-    fi
-
     install_xsession_entry
 
     if [[ -n "$dm" ]]; then
@@ -1270,14 +1108,6 @@ enable_services() { # jalankan OXWM: via DM bila ada, atau autologin tty1+startx
         return 0
     fi
 
-    if [[ "$NO_AUTOLOGIN" -eq 1 ]]; then
-        log "tanpa display manager + --no-autologin: lewati autologin (login manual, lalu startx)"
-        enable_hw_services "$owner"
-        SESSION_MODE="manual"
-        tahap "layanan" "ok" "tanpa autologin (manual)"
-        return 0
-    fi
-
     # Tanpa display manager: autologin getty di tty1 + startx otomatis.
     log "tanpa display manager: autologin konsol tty1 + startx otomatis"
     setup_autologin "$owner"
@@ -1290,7 +1120,7 @@ enable_services() { # jalankan OXWM: via DM bila ada, atau autologin tty1+startx
 
 nerd_terpasang() { # $1=owner -> 0 bila fc-list user itu melihat JetBrainsMono Nerd
     # HARUS dalam konteks owner: fc-list root tak memindai ~/.local/share/fonts user.
-    # Tanpa su bila owner == user aktif (agar dry-run non-root tak meminta password).
+    # Tanpa su bila owner == user aktif (mis. dipanggil sebagai user itu sendiri).
     # Pakai hitungan (-c), BUKAN -q: grep -q keluar lebih awal -> penulis kena
     # SIGPIPE -> pipefail menandakan gagal walau font sebenarnya ada!
     local n=0
@@ -1313,32 +1143,28 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
     target="$(user_home "$owner")/.local/share/fonts"
     log "font Nerd belum ada -> unduh JetBrainsMono $NERDFONT_VERSION (terpin) ke $target"
     tahap "font" "mulai" "JetBrainsMono $NERDFONT_VERSION (tar.xz)"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati unduhan font"
-    else
-        tmp="$(new_tmpdir)"
-        arsip="$tmp/JetBrainsMono.tar.xz"
-        mkdir -p "$target"
-        # mkdir -p sebagai root meninggalkan ~/.local dan ~/.local/share milik
-        # root; Xorg rootless (autologin+startx) perlu menulis
-        # ~/.local/share/xorg. Kembalikan dir pembungkusnya (tanpa -R).
-        data_dir="$(dirname "$target")"
-        chown "$owner:$owner" "$data_dir" "$(dirname "$data_dir")" 2>/dev/null || true
-        curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
-            "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
-            -o "$arsip" || die "unduhan font gagal"
-        log "verifikasi sha256 arsip font..."
-        echo "${NERDFONT_SHA256}  ${arsip}" | sha256sum -c - \
-            || die "checksum font tak cocok (unduhan rusak/disusupi?)"
-        tar -xJf "$arsip" -C "$target" || die "ekstraksi font gagal"
-        rm -f "$arsip"
-        compgen -G "$target/*.ttf" >/dev/null || die "tak ada .ttf di $target setelah ekstraksi"
-        fc-cache -f "$target" >/dev/null 2>&1 || true
-        chown -R "$owner:$owner" "$target" 2>/dev/null || true
-        nerd_terpasang "$owner" \
-            || die "font Nerd tak terdeteksi setelah dipasang"
-        record_state nerdfont.version "$NERDFONT_VERSION"
-    fi
+    tmp="$(new_tmpdir)"
+    arsip="$tmp/JetBrainsMono.tar.xz"
+    mkdir -p "$target"
+    # mkdir -p sebagai root meninggalkan ~/.local dan ~/.local/share milik
+    # root; Xorg rootless (autologin+startx) perlu menulis
+    # ~/.local/share/xorg. Kembalikan dir pembungkusnya (tanpa -R).
+    data_dir="$(dirname "$target")"
+    chown "$owner:$owner" "$data_dir" "$(dirname "$data_dir")" 2>/dev/null || true
+    curl -fSL --retry 3 --retry-delay 2 --proto '=https' --proto-redir '=https' \
+        "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONT_VERSION}/JetBrainsMono.tar.xz" \
+        -o "$arsip" || die "unduhan font gagal"
+    log "verifikasi sha256 arsip font..."
+    echo "${NERDFONT_SHA256}  ${arsip}" | sha256sum -c - \
+        || die "checksum font tak cocok (unduhan rusak/disusupi?)"
+    tar -xJf "$arsip" -C "$target" || die "ekstraksi font gagal"
+    rm -f "$arsip"
+    compgen -G "$target/*.ttf" >/dev/null || die "tak ada .ttf di $target setelah ekstraksi"
+    fc-cache -f "$target" >/dev/null 2>&1 || true
+    chown -R "$owner:$owner" "$target" 2>/dev/null || true
+    nerd_terpasang "$owner" \
+        || die "font Nerd tak terdeteksi setelah dipasang"
+    record_state nerdfont.version "$NERDFONT_VERSION"
     tahap "font" "ok" "font Nerd terpasang"
 }
 
@@ -1346,8 +1172,7 @@ ensure_nerdfont() { # ikon topbar butuh JetBrainsMono Nerd Font; unduh bila tak 
 # Installer mengingat versi terpasang di state dir; update = bandingkan
 # dengan pin/HEAD terbaru, bangun ulang hanya yang outdated.
 state_dir() { printf '%s' "${OXWM_STATE_DIR:-/var/lib/oxwm-installer}"; }
-record_state() { # $1=nama $2=nilai - catat versi terpasang (lewati saat dry-run)
-    [[ "$DRY_RUN" -eq 1 ]] && return 0
+record_state() { # $1=nama $2=nilai - catat versi terpasang
     local d
     d="$(state_dir)"
     mkdir -p "$d" 2>/dev/null || return 0
@@ -1381,7 +1206,7 @@ upstream_head() { # $1=url repo git -> SHA HEAD atau "" (butuh git + jaringan)
 }
 check_updates() { # laporan "nama|terpasang|tersedia|status" per baris (butuh jaringan)
     local inst avail zv
-    # oxwm: pin installer, atau HEAD bila --latest.
+    # oxwm: pin installer, atau HEAD bila OXWM_LATEST=1.
     inst="$(read_state oxwm.commit)"
     if [[ "$inst" == repo:* ]]; then
         printf 'oxwm|%s|repo-sistem|repo-sistem\n' "$inst"
@@ -1433,27 +1258,16 @@ do_self_update() { # bangun ulang hanya komponen outdated (state vs pin/HEAD)
         tahap "self-update" "ok" "mutakhir"
         return 0
     fi
-    if [[ "$DRY_RUN" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then
-        if [[ ! -t 0 ]]; then
-            echo "Ringkasan: $n_tindakan komponen outdated/tak-dikenal, bangun ulang yang itu saja." >&2
-            pipe_grace
-        else
-            echo "$report" | print_updates
-            read -rp "Terapkan $n_tindakan pembaruan? [y/N] " jawab
-            [[ "$jawab" == "y" || "$jawab" == "Y" ]] || die "dibatalkan pengguna"
-        fi
-    fi
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) lewati penerapan $n_tindakan pembaruan"
-        return 0
+    if [[ "$ASSUME_YES" -eq 0 ]]; then
+        print_updates "$report"
+        ask_confirm "Terapkan $n_tindakan pembaruan?" \
+            || die "dibatalkan pengguna"
     fi
     REBUILD=1 # di titik ini semua yang dibangun memang perlu dibangun ulang
-    # Terminal ikut state (bawaan st untuk instalasi lama); --terminal menimpa.
-    if [[ "$TERMINAL_SET" -eq 0 ]]; then
-        local st_rec
-        st_rec="$(read_state terminal)"
-        TERMINAL="${st_rec:-st}"
-    fi
+    # Terminal ikut state (bawaan st untuk instalasi lama).
+    local st_rec
+    st_rec="$(read_state terminal)"
+    TERMINAL="${st_rec:-st}"
     update_needed oxwm "$report" && install_oxwm
     if [[ "$TERMINAL" == "st" ]]; then
         update_needed st "$report" && build_st
@@ -1473,7 +1287,7 @@ remove_if_ours() { # $1=file $2=penanda -> hapus hanya bila buatan installer
     local f="$1" mark="$2"
     [[ -e "$f" || -L "$f" ]] || { log "tak ada: $f"; return 0; }
     if grep -qF -- "$mark" "$f" 2>/dev/null; then
-        run_or_dry rm -f "$f"
+        rm -f "$f"
     else
         log "peringatan: $f bukan buatan installer - dibiarkan"
     fi
@@ -1487,11 +1301,7 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
     profile="$home/.bash_profile"
     log "hapus instalasi OXWM..."
     tahap "uninstall" "mulai" "bersih-bersih"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) hapus biner oxwm/st/helpers + oxu + state pembaruan + sesi (dotfiles dibiarkan)"
-        return 0
-    fi
-    # Bindir + lokasi zig bisa di-override (uji fungsi memakai dir temp agar
+    # Bindir + lokasi zig bisa di-override (uji manual memakai dir temp agar
     # tak pernah menyentuh /usr/local/bin + /opt sungguhan).
     local bindir="${OXWM_BIN_DIR:-/usr/local/bin}" zigdir="${OXWM_ZIG_DIR:-/opt/zig}"
     # Biner bernama unik buatan installer (tak dipakai paket distro).
@@ -1500,7 +1310,7 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
              "$bindir"/st-tokyonight "$bindir"/st-gruvbox "$bindir"/st-catppuccin \
              "$bindir"/oxt "$bindir"/oxu "$bindir"/oxwm-update \
              "$bindir"/oxwm-theme "$bindir"/dmenu-themed; do
-        run_or_dry rm -f "$f"
+        rm -f "$f"
     done
     # Nama yang menimpa biner sistem: hanya bila wrapper buatan kita,
     # agar dmenu/dunst/st asli kembali dipakai setelahnya.
@@ -1509,14 +1319,14 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
     remove_if_ours "$bindir/dunst" "bertema oxwm"
     # zig tarball buatan kita (symlink -> /opt/zig): kembalikan bila begitu.
     if [[ "$(readlink "$bindir/zig" 2>/dev/null)" == "$zigdir/zig" ]]; then
-        run_or_dry rm -f "$bindir/zig"
-        run_or_dry rm -rf "$zigdir"
+        rm -f "$bindir/zig"
+        rm -rf "$zigdir"
     else
         log "zig dibiarkan (bukan tarball installer)"
     fi
     # State pembaruan (dibaca oxu: commit/versi terpasang) ikut dibuang.
-    run_or_dry rm -rf "$(state_dir)"
-    run_or_dry rm -f "$(xsession_file)"
+    rm -rf "$(state_dir)"
+    rm -f "$(xsession_file)"
     remove_autologin
     remove_startx_block "$profile"
     chown "$owner:$owner" "$profile" 2>/dev/null || true
@@ -1524,76 +1334,119 @@ do_uninstall() { # hapus biner + sesi buatan installer; dotfiles user dibiarkan
     tahap "uninstall" "ok" "selesai"
 }
 
+verify_install() { # cek hasil instalasi; gagal keras bila ada komponen hilang
+    log "verifikasi hasil instalasi..."
+    tahap "verifikasi" "mulai" "biner + dotfiles + sesi + font"
+    local owner="${SUDO_USER:-$(whoami)}" home f theme missing=0
+    valid_user "$owner" || die "nama user tidak valid: '$owner'"
+    home="$(user_home "$owner")"
+    local bindir="${OXWM_BIN_DIR:-/usr/local/bin}"
+    local -a bins=(oxwm oxwm-theme oxt oxu oxwm-update dmenu_run dmenu-themed dunst)
+    if [[ "$TERMINAL" == "st" ]]; then
+        bins+=(st st-tokyonight st-gruvbox st-catppuccin)
+    fi
+    for f in "${bins[@]}"; do
+        if [[ ! -x "$bindir/$f" ]]; then
+            log "verifikasi: GAGAL, $bindir/$f tidak ada/tidak executable"
+            missing=1
+        fi
+    done
+    if [[ "$TERMINAL" != "st" ]] && ! command -v "$TERMINAL" >/dev/null 2>&1; then
+        log "verifikasi: GAGAL, terminal $TERMINAL tidak ditemukan"
+        missing=1
+    fi
+    # Dotfiles wajib (config lama yang dipertahankan tetap harus ada).
+    local -a files=(
+        ".config/oxwm/config.lua" ".config/oxwm/theme"
+        ".config/khal/config" ".config/fastfetch/config.jsonc" ".xinitrc"
+    )
+    for f in "${files[@]}"; do
+        if [[ ! -s "$home/$f" ]]; then
+            log "verifikasi: GAGAL, $home/$f tidak ada/kosong"
+            missing=1
+        fi
+    done
+    # Ketiga tema harus lengkap: palet, wallpaper, dan dunstrc.
+    for theme in tokyonight gruvbox catppuccin; do
+        if [[ ! -s "$home/.config/oxwm/colors/$theme.lua" ]]; then
+            log "verifikasi: GAGAL, palet $theme tidak ada"
+            missing=1
+        fi
+        if ! compgen -G "$home/.config/oxwm/wallpapers/*$theme*" >/dev/null; then
+            log "verifikasi: GAGAL, wallpaper $theme tidak ada"
+            missing=1
+        fi
+        if [[ ! -s "$home/.config/oxwm/dunstrc-$theme" ]]; then
+            log "verifikasi: GAGAL, dunstrc $theme tidak ada"
+            missing=1
+        fi
+    done
+    if [[ ! -s "$(xsession_file)" ]] \
+        || ! grep -q '^TryExec=/usr/local/bin/oxwm$' "$(xsession_file)"; then
+        log "verifikasi: GAGAL, entri sesi OXWM tidak lengkap"
+        missing=1
+    fi
+    if [[ "$SESSION_MODE" == "autologin" ]]; then
+        if ! grep -q "autologin $owner" "$(getty_dropin_path)" 2>/dev/null; then
+            log "verifikasi: GAGAL, autologin tty1 untuk $owner tidak ada"
+            missing=1
+        fi
+        if ! grep -q "oxwm-installer: startx otomatis" "$home/.bash_profile" 2>/dev/null; then
+            log "verifikasi: GAGAL, blok startx otomatis tidak ada di $home/.bash_profile"
+            missing=1
+        fi
+    fi
+    nerd_terpasang "$owner" || { log "verifikasi: GAGAL, font Nerd tak terdeteksi"; missing=1; }
+    command -v fastfetch >/dev/null 2>&1 \
+        || { log "verifikasi: GAGAL, fastfetch tak ditemukan"; missing=1; }
+    command -v startx >/dev/null 2>&1 \
+        || { log "verifikasi: GAGAL, startx tak ditemukan"; missing=1; }
+    if [[ "$missing" -ne 0 ]]; then
+        die "verifikasi gagal: instalasi tidak lengkap (perbaiki lalu jalankan ulang; log: $LOG_FILE)"
+    fi
+    tahap "verifikasi" "ok" "semua komponen terpasang"
+    log "verifikasi OK: biner, dotfiles, tema, sesi, font, startx"
+}
+
 finish() {
     case "$SESSION_MODE" in
         dm:*) log "selesai. reboot: pilih sesi OXWM di display manager (${SESSION_MODE#dm:}), lalu login." ;;
-        manual) log "selesai. login manual, lalu jalankan startx untuk masuk OXWM." ;;
         *) log "selesai. reboot: login konsol otomatis di tty1 lalu startx jalan sendiri ke OXWM." ;;
     esac
     log "log lengkap: $LOG_FILE"
 }
 
+explain_steps() {
+    cat >&2 <<'EOF'
+
+Langkah instalasi:
+  1) Pilihan sesi & terminal  - menu singkat; Enter memakai opsi bawaan.
+  2) Update sistem & paket    - menyegarkan repo lalu memasang Xorg, font, dll.
+  3) Terminal bawaan          - st dibangun dari source (3 varian tema) atau paket repo.
+  4) Font Nerd                - JetBrainsMono untuk ikon topbar (bila belum ada).
+  5) OXWM                     - dibangun dari source (zig, pin komit teruji).
+  6) Helper & dotfiles        - topbar, keybind, tema, dmenu/dunst bertema.
+  7) Sesi login               - autologin tty1 + startx, atau display manager yang ada.
+Setelah selesai: ganti tema kapan saja dengan `oxt`, perbarui komponen dengan `oxu`.
+EOF
+}
+
 main() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --dry-run) DRY_RUN=1; shift ;;
-            --yes) ASSUME_YES=1; shift ;;
-            --rebuild) REBUILD=1; shift ;;
-            --latest) LATEST=1; shift ;;
-            --no-update) NO_UPDATE=1; shift ;;
-            --uninstall) UNINSTALL=1; shift ;;
-            --self-update) SELF_UPDATE=1; shift ;;
-            --check) CHECK_ONLY=1; shift ;;
-            --session)
-                [[ -n "${2:-}" ]] || { echo "opsi --session butuh nilai (auto|autologin)"; exit 2; }
-                [[ "$SESSION_SET" -eq 0 ]] || { echo "opsi sesi ganda (--dm/--session/--force-autologin/--no-autologin)" >&2; exit 2; }
-                case "$2" in
-                    auto|autologin) SESSION_REQ="$2" ;;
-                    *) echo "sesi tidak dikenal: $2 (pilih: auto|autologin; DM via --dm)"; exit 2 ;;
-                esac
-                SESSION_SET=1; shift 2 ;;
-            --dm)
-                [[ -n "${2:-}" ]] || { echo "opsi --dm butuh nilai (sddm|gdm|lightdm)"; exit 2; }
-                [[ "$SESSION_SET" -eq 0 ]] || { echo "opsi sesi ganda (--dm/--session/--force-autologin/--no-autologin)" >&2; exit 2; }
-                [[ " ${DM_KNOWN[*]} " == *" $2 "* ]] || { echo "DM tidak dikenal: $2 (pilih: ${DM_KNOWN[*]})"; exit 2; }
-                SESSION_REQ="dm:$2"; SESSION_SET=1; shift 2 ;;
-            --terminal)
-                [[ -n "${2:-}" ]] || { echo "opsi --terminal butuh nilai (st|alacritty|kitty|ghostty)"; exit 2; }
-                [[ " ${TERM_KNOWN[*]} " == *" $2 "* ]] || { echo "terminal tidak dikenal: $2 (pilih: ${TERM_KNOWN[*]})"; exit 2; }
-                TERMINAL="$2"; TERMINAL_SET=1; shift 2 ;;
-            --force-autologin) FORCE_AUTOLOGIN=1; shift ;;
-            --no-autologin) NO_AUTOLOGIN=1; shift ;;
-            --theme=*) THEME="${1#--theme=}"; THEME_SET=1; shift ;;
-            --theme)
-                [[ -n "${2:-}" ]] || { echo "opsi --theme butuh nilai (tokyonight|gruvbox|catppuccin)"; exit 2; }
-                THEME="$2"; THEME_SET=1; shift 2 ;;
-            --version) echo "oxwm-installer $VERSION"; exit 0 ;;
-            --help) usage; exit 0 ;;
-            *) echo "opsi tidak dikenal: $1 (lihat --help)"; exit 2 ;;
-        esac
+    if [[ $# -gt 0 ]]; then
+        echo "installer tidak memakai flag; jalankan tanpa argumen (semua pilihan lewat menu)." >&2
+        exit 2
+    fi
+    local v
+    for v in ASSUME_YES REBUILD LATEST NO_UPDATE; do
+        [[ "${!v}" =~ ^[01]$ ]] \
+            || { echo "nilai internal $v harus 0 atau 1 (dapat '${!v}')" >&2; exit 2; }
     done
-    if [[ "$FORCE_AUTOLOGIN" -eq 1 && "$NO_AUTOLOGIN" -eq 1 ]]; then
-        echo "--force-autologin dan --no-autologin saling bertentangan" >&2
-        exit 2
-    fi
-    # Flag lama dipetakan ke sesi baru (tetap didukung).
-    if [[ "$FORCE_AUTOLOGIN" -eq 1 ]]; then
-        [[ "$SESSION_SET" -eq 0 ]] || { echo "opsi sesi ganda (--dm/--session/--force-autologin/--no-autologin)" >&2; exit 2; }
-        SESSION_REQ="autologin"; SESSION_SET=1
-    fi
-    if [[ "$NO_AUTOLOGIN" -eq 1 ]]; then
-        [[ "$SESSION_SET" -eq 0 ]] || { echo "opsi sesi ganda (--dm/--session/--force-autologin/--no-autologin)" >&2; exit 2; }
-        SESSION_REQ="manual"; SESSION_SET=1
-    fi
-    if [[ "$UNINSTALL" -eq 1 && ( "$SELF_UPDATE" -eq 1 || "$CHECK_ONLY" -eq 1 ) ]]; then
-        echo "--uninstall tidak bisa digabung --self-update/--check" >&2
-        exit 2
-    fi
-    case "$THEME" in
-        t|tokyonight) THEME=tokyonight ;;
-        g|gruvbox) THEME=gruvbox ;;
-        c|catppuccin) THEME=catppuccin ;;
-        *) echo "tema tidak dikenal: $THEME (pilih: t/g/c)"; exit 2 ;;
+    case "$ACTION" in
+        install) ;;
+        uninstall) UNINSTALL=1 ;;
+        self-update) SELF_UPDATE=1 ;;
+        check) CHECK_ONLY=1 ;;
+        *) echo "OXWM_ACTION tidak dikenal: $ACTION (install|uninstall|self-update|check)" >&2; exit 2 ;;
     esac
     [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || die "OXWM_REF tidak valid: '$REF'"
     [[ "$REF" != *..* ]] || die "OXWM_REF tidak boleh mengandung '..': '$REF'"
@@ -1613,23 +1466,16 @@ main() {
     init_log
     trap cleanup_tmpdirs EXIT
     trap 'on_err "$?" "$BASH_COMMAND" "${BASH_LINENO[0]}"' ERR
-    log "========== oxwm-installer mulai (dry-run=$DRY_RUN) =========="
+    log "========== oxwm-installer $VERSION mulai (aksi=$ACTION) =========="
     if [[ "$LATEST" -eq 1 ]]; then
-        log "catatan: --latest, OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
+        log "catatan: OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
     fi
     check_root
-    if [[ "$DRY_RUN" -eq 0 ]]; then
-        acquire_lock
-    fi
+    acquire_lock
     if [[ "$UNINSTALL" -eq 1 ]]; then
-        if [[ "$DRY_RUN" -eq 0 && "$ASSUME_YES" -eq 0 ]]; then
-            if [[ ! -t 0 ]]; then
-                echo "Ringkasan: hapus biner + sesi OXWM buatan installer (dotfiles dibiarkan)." >&2
-                pipe_grace
-            else
-                read -rp "Hapus instalasi OXWM? [y/N] " jawab
-                [[ "$jawab" == "y" || "$jawab" == "Y" ]] || die "dibatalkan pengguna"
-            fi
+        if [[ "$ASSUME_YES" -eq 0 ]]; then
+            echo "PERINGATAN: ini menghapus biner + sesi OXWM buatan installer; dotfiles dibiarkan." >&2
+            ask_confirm "Hapus instalasi OXWM?" || die "dibatalkan pengguna"
         fi
         do_uninstall
         log "log lengkap: $LOG_FILE"
@@ -1643,7 +1489,8 @@ main() {
         log "log lengkap: $LOG_FILE"
         return 0
     fi
-    tahap "mulai" "ok" "instalasi OXWM dimulai (distro=$DISTRO dry-run=$DRY_RUN)"
+    tahap "mulai" "ok" "instalasi OXWM dimulai (distro=$DISTRO)"
+    explain_steps
     resolve_choices
     confirm
     resolve_repo_dir
@@ -1657,6 +1504,7 @@ main() {
     install_helpers
     deploy_dotfiles
     enable_services
+    verify_install
     finish
 }
 
