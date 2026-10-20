@@ -1235,7 +1235,7 @@ tui_complete() {
     printf '  %s•%s dotfiles di ~/.config/oxwm (config lama dibackup)\n' "$C_GREEN" "$C0" >/dev/tty
     printf '  %s•%s sesi: %s\n\n' "$C_GREEN" "$C0" "$(session_description "$dm")" >/dev/tty
     printf '  %sMulai:%s %s\n' "$C_BOLD" "$C0" "$mulai" >/dev/tty
-    printf '  %sGanti tema:%s oxt g      %sPerbarui:%s oxu\n\n' "$C_BOLD" "$C0" "$C_BOLD" "$C0" >/dev/tty
+    printf '  %sGanti tema:%s oxt c/g/t  %sPerbarui:%s oxu\n\n' "$C_BOLD" "$C0" "$C_BOLD" "$C0" >/dev/tty
     printf '  %sLog:%s %s\n\n' "$C_DIM" "$C0" "$LOG_FILE" >/dev/tty
     printf '  %sTekan Enter untuk keluar%s\n' "$C_DIM" "$C0" >/dev/tty
     tui_read_key >/dev/null
