@@ -36,7 +36,7 @@ jobs:
       - name: Jalankan installer (nyata)
         shell: bash
         run: |
-          su - tester -c "sudo env OXWM_YES=1 OXWM_NO_UPDATE=1 bash '$GITHUB_WORKSPACE/oxi'"
+          sudo -H -u tester env OXWM_YES=1 OXWM_NO_UPDATE=1 bash "$GITHUB_WORKSPACE/oxi"
       - name: Tampilkan log installer
         if: failure()
         shell: bash
