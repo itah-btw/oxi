@@ -116,6 +116,10 @@ prepare_user_tmpdir() {
 # /usr/local/bin, drop-in getty, dst). Non-blokir: langsung gagal.
 acquire_lock() {
     local lock="${OXWM_LOCK_FILE:-/var/lock/oxi.lock}"
+    if [[ ! -d "$(dirname "$lock")" ]]; then
+        lock="/run/lock/oxi.lock"
+        mkdir -p "$(dirname "$lock")" 2>/dev/null || true
+    fi
     exec 9>"$lock" || die "gagal membuka lockfile $lock"
     flock -n 9 || die "installer sedang berjalan di sesi lain (lock: $lock)"
     log "lock terkunci: $lock"
