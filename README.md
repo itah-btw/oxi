@@ -23,8 +23,8 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 ## Yang dipasang script ini
 
 - Xorg + dependensi build OXWM (`zig`, `libx11`, `libxft`, `freetype`, `fontconfig`, `libxinerama` - nama paket dipetakan otomatis per distro)
-- OXWM dibangun dari source komit teruji yang di-pin (`472c7675`; `OXWM_LATEST=1` untuk HEAD), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
-- Terminal `st` (bawaan: build 3 tema + dispatcher, ikut `oxt`) atau `alacritty`/`kitty`/`ghostty` dari repo - ketiganya ikut `oxt` via templat warna per tema
+- OXWM dibangun dari source **HEAD terbaru** (opsional: `OXWM_PIN=<sha>` untuk komit tertentu), terpasang di `/usr/local/bin/oxwm` + perintah pendamping (`oxt`, `dmenu_run`/`dmenu-themed`/`dunst` bertema). Bila kelak ada biner resmi di repo distro, installer memakainya dulu (tanpa compile) dan hanya build dari source sebagai fallback
+- Terminal: `st` (bawaan, dibangun dari source; ringan dan minimal, tanpa tab) atau `alacritty`/`kitty`/`ghostty` dari repo (GPU; `kitty`/`ghostty` punya tab/split, ligatur, dan gambar; `alacritty` ringan tanpa tab)
 - Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Audio PipeWire lengkap
 (pipewire + wireplumber + pipewire-pulse/pipewire-alsa agar aplikasi
 PulseAudio/ALSA bersuara; socket user di-enable, grup audio ditambahkan). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
@@ -77,7 +77,7 @@ sudo env OXWM_YES=1 bash oxi                        # tanpa TUI, pakai bawaan
 sudo env OXWM_ACTION=uninstall OXWM_YES=1 bash oxi  # hapus instalasi
 sudo env OXWM_REBUILD=1 bash oxi                    # bangun ulang oxwm + st
 sudo env OXWM_NO_UPDATE=1 OXWM_YES=1 bash oxi       # tanpa upgrade sistem
-sudo env OXWM_LATEST=1 OXWM_YES=1 bash oxi          # oxwm dari HEAD terbaru
+sudo env OXWM_PIN=<40-heksa> OXWM_YES=1 bash oxi     # pin oxwm ke komit tertentu
 ```
 
 Installer memverifikasi sendiri hasilnya di akhir: biner (oxwm, st/terminal
@@ -85,9 +85,8 @@ pilihan, helper), dotfiles, tiga tema, entri sesi, autologin, font Nerd, dan
 `startx`. Bila ada yang kurang, proses berhenti dengan error (bukan sukses
 setengah jadi). Unduhan diperiksa checksum-nya dan gagal keras bila rusak.
 
-OXWM dibangun dari komit teruji yang di-pin (`472c7675`, reproduksibel);
-`OXWM_LATEST=1` atau `OXWM_PIN=""` untuk HEAD terbaru, `OXWM_PIN=<40-heksa>`
-untuk komit lain.
+OXWM dibangun dari HEAD terbaru. Bila perlu versi tertentu, set
+`OXWM_PIN=<40-heksa>`; `OXWM_LATEST=1` atau `OXWM_PIN=""` memaksa HEAD.
 
 Sesi otomatis tanpa menu: ada DM -> DM itu dipakai (entri `OXWM` muncul di
 menu sesi; autologin buatan oxi yang lama dibersihkan agar tak berebut VT).
@@ -102,9 +101,11 @@ Saat dijalankan di terminal, `oxi` menampilkan TUI seperti installer DMS:
 
 1. **Ringkasan** - banner, distro/arsitektur, deteksi sesi (DM yang ada
    atau autologin), dan daftar komponen yang akan dipasang.
-2. **Terminal** - `st` (bawaan: build 3 tema), `alacritty`, `kitty`,
-   `ghostty` (dari repo; yang tak ada disembunyikan, mis. `ghostty`
-   di Debian). Navigasi ↑/↓, Enter memilih, Esc kembali.
+2. **Terminal** - `st` (bawaan, build source; ringan dan minimal),
+   `alacritty` (GPU/OpenGL, tanpa tab), `kitty` (GPU; tab/split, ligatur,
+   gambar), `ghostty` (GPU modern; tab/split, ligatur). Yang tak ada di repo
+   disembunyikan, mis. `ghostty` di Debian. Navigasi ↑/↓, Enter memilih,
+   Esc kembali.
 3. **Konfirmasi** - ringkasan akhir + peringatan; Enter mulai.
 4. **Progres** - bar, tahap yang selesai/berjalan, dan output terakhir.
 5. **Selesai/gagal** - langkah reboot, perintah `oxt`/`oxu`, dan log.
@@ -128,7 +129,7 @@ oxu            # bangun ulang hanya komponen yang outdated
 oxu --check    # cek saja (tanpa root pun bisa)
 ```
 
-`oxu` selalu mengunduh installer terbaru dulu (pin ikut terbaru), lalu
+`oxu` selalu mengunduh installer terbaru dulu, lalu
 membandingkan dengan catatan versi di `/var/lib/oxi/`
 (komit oxwm/st, versi zig/font/fastfetch). Paket repo (`dmenu`, `btop`,
 `fastfetch` Debian baru, dst.) tetap urusan `pacman -Syu`/`apt upgrade`.
@@ -160,7 +161,7 @@ terpasang di `/usr/local/bin`.
 ## Tema
 
 Semua tema (`t=tokyonight`, `g=gruvbox`, `c=catppuccin`) SELALU terpasang:
-st 3 varian, palet, wallpaper, dunstrc per tema. Ganti tema aktif:
+st, palet, wallpaper, dunstrc per tema. Ganti tema aktif:
 
 ```bash
 oxt g   # atau oxt gruvbox

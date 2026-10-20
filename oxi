@@ -7,7 +7,7 @@
 # Alur: siapkan log -> cek root -> deteksi distro -> TUI (ringkasan, pilih
 #       terminal, konfirmasi) -> update sistem -> instal paket (nama dipetakan
 #       per distro) -> pastikan fastfetch/zig/font Nerd -> bangun & pasang OXWM
-#       dari source -> bangun st 3 tema -> pasang perintah pendamping ->
+#       dari source -> bangun st -> pasang perintah pendamping ->
 #       deploy dotfiles (topbar, keybind, tema, dmenu/dunst bertema,
 #       skrip status, khal) -> sesi OXWM (DM yang ada dipakai apa adanya;
 #       tanpa DM: autologin getty tty1 + startx) -> verifikasi -> selesai.
@@ -20,7 +20,7 @@ LOG_FILE="oxi.log"  # ditimpa init_log() ke path tetap bila bisa ditulis
 VERSION="1.3.0"
 ASSUME_YES="${OXWM_YES:-0}"      # internal/otomasi
 REBUILD="${OXWM_REBUILD:-0}"     # internal: bangun ulang walau biner ada
-LATEST="${OXWM_LATEST:-0}"       # internal: OXWM dari HEAD terbaru
+LATEST="${OXWM_LATEST:-0}"       # internal: paksa HEAD (default sudah HEAD)
 NO_UPDATE="${OXWM_NO_UPDATE:-0}" # internal: lewati upgrade sistem
 ACTION="${OXWM_ACTION:-install}" # internal: install|uninstall|self-update|check
 UNINSTALL=0
@@ -60,10 +60,9 @@ NERDFONT_SHA256="04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010c
 # Catatan pin: hanya untuk unduhan upstream. Paket repo distro (apt/dnf/pacman)
 # selalu latest dari repo saat instalasi berjalan - pin tak mengubah itu.
 OXWM_REPO="https://github.com/tonybanters/oxwm"
-OXWM_PIN_DEFAULT="472c76753fed1e1430014328237da1db053bbb64" # komit teruji 2026-10-07 (merge PR #258)
-# Default reproduksibel (pin); HEAD terbaru hanya bila: OXWM_LATEST=1, OXWM_PIN=""
-# eksplisit, atau OXWM_PIN=<40-heksa lain>. Bedakan "tak diset" (-) dari
-# "dikosongkan" (:-) agar override kosong tetap berarti HEAD.
+OXWM_PIN_DEFAULT="" # default: HEAD terbaru; isi SHA-1 untuk pin komit tertentu
+# Bedakan "tak diset" (-) dari "dikosongkan" (:-) agar override kosong tetap
+# berarti HEAD terbaru.
 OXWM_PIN="${OXWM_PIN-$OXWM_PIN_DEFAULT}"
 TMPDIRS=()              # diisi new_tmpdir(); dibersihkan trap di main()
 REPO_SLUG="itah-btw/oxi"
@@ -476,9 +475,9 @@ install_oxwm() { # biner repo bila ada (cepat), fallback: bangun dari source
         tahap "oxwm" "dilewati" "sudah terpasang"
         return 0
     fi
-    # OXWM_PIN bisa ditimpa via environment (OXWM_LATEST=1 atau OXWM_PIN="" = HEAD
-    # terbaru): validasi sebelum dipakai di dalam `su -c "..."` (injeksi shell
-    # berjalan sebagai user target). Default: pin teruji (reproduksibel).
+    # Default: HEAD terbaru. OXWM_PIN=<sha> memilih komit tertentu; OXWM_LATEST=1
+    # atau OXWM_PIN="" memaksa HEAD. Validasi sebelum dipakai di dalam
+    # `su -c "..."` (injeksi shell berjalan sebagai user target).
     if [[ -n "$OXWM_PIN" ]]; then
         [[ "$OXWM_PIN" =~ ^[0-9a-f]{40}$ ]] || die "OXWM_PIN tidak valid (harus SHA-1 40 digit heksa; kosongkan untuk HEAD terbaru)"
     fi
@@ -488,13 +487,13 @@ install_oxwm() { # biner repo bila ada (cepat), fallback: bangun dari source
         return 0
     fi
     log "bangun & pasang OXWM dari source ($OXWM_REPO)..."
-    tahap "oxwm" "mulai" "zig build dari source (pin ${OXWM_PIN:-HEAD})"
+    tahap "oxwm" "mulai" "zig build dari source (${OXWM_PIN:+pin }${OXWM_PIN:-HEAD terbaru})"
     ensure_zig # compiler hanya dibutuhkan di jalur source
     local tmp build_dir
     tmp="$(new_tmpdir)"
     build_dir="$tmp/oxwm-build"
     [[ "$build_dir" != *"'"* ]] || die "path sementara mengandung kutip tunggal"
-    # Pin ke komit teruji agar hasil dapat diulang; kosong = HEAD terbaru.
+    # Bila OXWM_PIN diisi, checkout komit itu; kosong = HEAD terbaru.
     # Clone sebagai pemilik repo agar tak kena dubious ownership bila
     # SUDO_USER terlibat.
     if [[ -n "${SUDO_USER:-}" ]]; then
@@ -561,13 +560,13 @@ build_st() { # terminal st dari source suckless, 3 build bertema + dispatcher `s
     # build-nya pun hanya hitungan detik (satu file C, -j paralel).
     local repo="https://git.suckless.org/st"
     if [[ "$REBUILD" -eq 0 && -x /usr/local/bin/st && -x /usr/local/bin/st-tokyonight && -x /usr/local/bin/st-gruvbox && -x /usr/local/bin/st-catppuccin ]]; then
-        log "st 3 tema sudah terpasang, lewati (pakai OXWM_REBUILD=1 untuk bangun ulang)"
+        log "st sudah terpasang, lewati (pakai OXWM_REBUILD=1 untuk bangun ulang)"
         return 0
     fi
     local jobs; jobs="$(nproc 2>/dev/null || echo 1)"
     local theme fg bg cur c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
-    log "bangun & pasang st 3 tema dari source ($repo)..."
-    tahap "st" "mulai" "make 3 tema"
+    log "bangun & pasang st dari source ($repo)..."
+    tahap "st" "mulai" "make st"
     local tmp build_dir orig
     tmp="$(new_tmpdir)"
     build_dir="$tmp/st-build"
@@ -977,7 +976,7 @@ remove_startx_block() { # $1=profile - buang blok startx buatan kita (pindah ke 
 terminal_options() { # isi array TUI_TERM_* dengan terminal yang tersedia di repo
     TUI_TERM_VAL=(st)
     TUI_TERM_LABEL=(st)
-    TUI_TERM_DESC=("Build dari source, super ringan; 3 varian warna ikut tema (oxt).")
+    TUI_TERM_DESC=("Dibangun dari source; ringan dan minimal (tanpa tab).")
     local t
     for t in "${TERM_KNOWN[@]:1}"; do
         if ! repo_has_pkg "$t"; then
@@ -985,9 +984,9 @@ terminal_options() { # isi array TUI_TERM_* dengan terminal yang tersedia di rep
             continue
         fi
         case "$t" in
-            alacritty) TUI_TERM_DESC+=("GPU-accelerated, cepat; warna ikut tema (oxt), terminal baru.") ;;
-            kitty)     TUI_TERM_DESC+=("GPU, fitur kaya (tab, gambar); warna ikut tema (oxt), reload otomatis.") ;;
-            ghostty)   TUI_TERM_DESC+=("GPU modern, default bagus; warna ikut tema (oxt), reload otomatis.") ;;
+            alacritty) TUI_TERM_DESC+=("Dari repo; GPU/OpenGL, cepat, tanpa tab; config TOML.") ;;
+            kitty)     TUI_TERM_DESC+=("Dari repo; GPU, tab/split, ligatur, dan gambar.") ;;
+            ghostty)   TUI_TERM_DESC+=("Dari repo; GPU modern, tab/split, ligatur, tampilan rapi.") ;;
         esac
         TUI_TERM_VAL+=("$t")
         TUI_TERM_LABEL+=("$t")
@@ -1063,8 +1062,8 @@ tui_welcome() { # $1=nama DM
         printf '\n  %sSystem:%s %s / %s\n' "$C_BOLD" "$C0" "${DISTRO_NAME:-$DISTRO}" "$arch" >/dev/tty
         printf '  %sSesi:%s   %s\n\n' "$C_BOLD" "$C0" "$(session_description "$dm")" >/dev/tty
         printf '  %sYANG AKAN DIPASANG%s\n\n' "$C_BOLD" "$C0" >/dev/tty
-        printf '  %s[wm]%s     OXWM (build dari source, pin teruji)\n' "$C_BLUE" "$C0" >/dev/tty
-        printf '  %s[term]%s   st 3 tema, atau alacritty/kitty/ghostty dari repo\n' "$C_BLUE" "$C0" >/dev/tty
+        printf '  %s[wm]%s     OXWM (build dari source, HEAD terbaru)\n' "$C_BLUE" "$C0" >/dev/tty
+        printf '  %s[term]%s   st (bawaan, build source) atau alacritty/kitty/ghostty\n' "$C_BLUE" "$C0" >/dev/tty
         printf '  %s[style]%s  tokyonight / gruvbox / catppuccin, ganti kapan saja via oxt\n' "$C_BLUE" "$C0" >/dev/tty
         printf '  %s[config]%s topbar, keybind, dmenu/dunst bertema, khal, fastfetch\n' "$C_BLUE" "$C0" >/dev/tty
         printf '  %s[start]%s  %s\n' "$C_BLUE" "$C0" "$(session_description "$dm")" >/dev/tty
@@ -1470,12 +1469,12 @@ upstream_head() { # $1=url repo git -> SHA HEAD atau "" (butuh git + jaringan)
 }
 check_updates() { # laporan "nama|terpasang|tersedia|status" per baris (butuh jaringan)
     local inst avail zv
-    # oxwm: pin installer, atau HEAD bila OXWM_LATEST=1.
+    # oxwm: HEAD upstream, atau komit tertentu bila OXWM_PIN diisi.
     inst="$(read_state oxwm.commit)"
     if [[ "$inst" == repo:* ]]; then
         printf 'oxwm|%s|repo-sistem|repo-sistem\n' "$inst"
     else
-        if [[ "$LATEST" -eq 1 ]]; then avail="$(upstream_head "$OXWM_REPO")"; else avail="$OXWM_PIN"; fi
+        if [[ -n "$OXWM_PIN" ]]; then avail="$OXWM_PIN"; else avail="$(upstream_head "$OXWM_REPO")"; fi
         report_line oxwm "$inst" "$avail"
     fi
     # st: suckless tanpa tag - satu-satunya acuan adalah HEAD.
@@ -1685,9 +1684,9 @@ explain_steps() {
 
 Langkah instalasi:
   1) Update sistem & paket    - menyegarkan repo lalu memasang Xorg, font, dll.
-  2) Terminal bawaan          - st dibangun dari source (3 varian tema) atau paket repo.
+  2) Terminal bawaan          - st dari source (ringan, minimal) atau paket repo (alacritty/kitty/ghostty).
   3) Font Nerd                - JetBrainsMono untuk ikon topbar (bila belum ada).
-  4) OXWM                     - dibangun dari source (zig, pin komit teruji).
+  4) OXWM                     - dibangun dari source HEAD terbaru (zig).
   5) Helper & dotfiles        - topbar, keybind, tema, dmenu/dunst bertema.
   6) Sesi login               - DM yang ada dipakai apa adanya; tanpa DM -> autologin tty1 + startx.
 Setelah selesai: ganti tema kapan saja dengan `oxt`, perbarui komponen dengan `oxu`.
@@ -1730,9 +1729,6 @@ main() {
     trap 'tui_cleanup; cleanup_tmpdirs' EXIT
     trap 'on_err "$?" "$BASH_COMMAND" "${BASH_LINENO[0]}"' ERR
     log "========== oxi $VERSION mulai (aksi=$ACTION) =========="
-    if [[ "$LATEST" -eq 1 ]]; then
-        log "catatan: OXWM dibangun dari HEAD terbaru (tak reproduksibel)"
-    fi
     check_root
     acquire_lock
     migrate_legacy
