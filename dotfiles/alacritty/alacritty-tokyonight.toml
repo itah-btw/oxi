@@ -1,4 +1,4 @@
-# oxwm-installer: tema tokyonight (disalin oxt ke alacritty.toml; ikut oxt).
+# oxi: tema tokyonight (disalin oxt ke alacritty.toml; ikut oxt).
 [font]
 size = 10.0
 

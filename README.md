@@ -1,6 +1,6 @@
-# oxwm-installer
+# oxi (OXWM Installer)
 
-Script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, dan Debian/Ubuntu** - cukup satu perintah, desktop siap pakai.
+`oxi` (singkatan dari **OXWM Installer**) adalah script instalasi otomatis window manager **OXWM** untuk **Arch Linux, Fedora, dan Debian/Ubuntu** - cukup satu perintah, desktop siap pakai.
 
 OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan hot-reload). Sumber: https://github.com/tonybanters/oxwm - script membangunnya dari source.
 
@@ -28,9 +28,9 @@ OXWM adalah *dynamic window manager* untuk X11 (gaya dwm, konfigurasi Lua dengan
 - Aplikasi pendukung: `dmenu`, `feh`, `maim`+`slop`, `xdotool`, `dunst`, `xclip`, font JetBrains Mono + Font Awesome, `btop`, `fastfetch` (Debian 13+/Ubuntu 25.04+; Debian lama ambil `.deb` upstream terpin 2.70.0 + checksum), `khal`, applet CLI (nmtui, bluetoothctl, wpctl, brightnessctl). Audio PipeWire lengkap
 (pipewire + wireplumber + pipewire-pulse/pipewire-alsa agar aplikasi
 PulseAudio/ALSA bersuara; socket user di-enable, grup audio ditambahkan). Font Nerd (JetBrainsMono v3.5.1 terpin + checksum) diunduh bila tak ada
-- Sesi OXWM: bila display manager terdeteksi (lightdm/gdm/sddm/lxdm/slim/xdm/ly/greetd/dll) maka DM dipakai + OXWM didaftarkan di `/usr/share/xsessions/oxwm.desktop`; bila tidak ada DM maka autologin getty di tty1 + `startx` otomatis
+- Sesi OXWM otomatis: bila display manager terdeteksi (lightdm/gdm/sddm/lxdm/slim/xdm/ly/greetd/dll) DM itu langsung dipakai + OXWM didaftarkan di `/usr/share/xsessions/oxwm.desktop`; bila tidak ada DM maka autologin getty di tty1 + `startx` otomatis. Tidak ada menu/pemasangan DM.
 - Dotfiles: `~/.config/oxwm/` (config + topbar, keybind, palet + wallpaper 3 tema, dunst bertema, skrip status cpu/temp/wifi/bt) + `~/.config/khal/` + `~/.xinitrc` (config lama dibackup)
-- Log instalasi: `/var/log/oxwm-installer/install.log` (fallback `./install.log` bila direktori itu tak bisa ditulis)
+- Log instalasi: `/var/log/oxi/install.log` (fallback `./oxi.log` bila direktori itu tak bisa ditulis)
 
 ## Kebutuhan
 
@@ -43,38 +43,41 @@ PulseAudio/ALSA bersuara; socket user di-enable, grup audio ditambahkan). Font N
 Copy perintah di bawah ini, paste ke terminal, lalu Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itah-btw/oxwm-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/itah-btw/oxi/main/oxi | sudo bash
 ```
 
-Installer menampilkan ringkasan + peringatan, lalu meminta konfirmasi
-`y/N` (dibaca dari terminal). Untuk otomasi, set `OXWM_YES=1`.
+Installer menampilkan TUI (ringkasan sistem, pilihan terminal, konfirmasi),
+lalu memasang dengan layar progres. Untuk CI/otomasi tanpa TUI, set
+`OXWM_YES=1` (pilihan bawaan: terminal `st`).
 
 Atau cara klasik:
 
 ```bash
-git clone https://github.com/itah-btw/oxwm-installer.git
-cd oxwm-installer
-chmod +x install.sh
+git clone https://github.com/itah-btw/oxi.git
+cd oxi
+chmod +x oxi
 
 # 1. Instalasi penuh
-sudo ./install.sh
+sudo ./oxi
 
 # 2. Reboot: pilih sesi OXWM di display manager (bila ada), atau
 #    login konsol otomatis di tty1 -> startx jalan sendiri (bila tanpa DM)
 sudo reboot
 ```
 
-Installer ini **tidak memakai flag**: semua pilihan ditanyakan lewat menu
-(lihat bagian berikut). Tekan Enter untuk memakai opsi bawaan.
+Installer ini **tidak memakai flag**. Di terminal, `oxi` menampilkan TUI
+bergaya dankinstall: banner, ringkasan sistem, pilihan terminal dengan panah,
+lalu layar progres. Tekan Enter untuk lanjut, Esc untuk kembali, Ctrl+C untuk
+batal. Konfirmasi `y/N` lama tidak dipakai lagi.
 
 Untuk otomasi/skrip dipakai environment internal (bukan flag CLI):
 
 ```bash
-sudo env OXWM_YES=1 bash install.sh                 # lewati konfirmasi y/N
-sudo env OXWM_ACTION=uninstall OXWM_YES=1 bash install.sh  # hapus instalasi
-sudo env OXWM_REBUILD=1 bash install.sh             # bangun ulang oxwm + st
-sudo env OXWM_NO_UPDATE=1 OXWM_YES=1 bash install.sh  # tanpa upgrade sistem
-sudo env OXWM_LATEST=1 OXWM_YES=1 bash install.sh   # oxwm dari HEAD terbaru
+sudo env OXWM_YES=1 bash oxi                        # tanpa TUI, pakai bawaan
+sudo env OXWM_ACTION=uninstall OXWM_YES=1 bash oxi  # hapus instalasi
+sudo env OXWM_REBUILD=1 bash oxi                    # bangun ulang oxwm + st
+sudo env OXWM_NO_UPDATE=1 OXWM_YES=1 bash oxi       # tanpa upgrade sistem
+sudo env OXWM_LATEST=1 OXWM_YES=1 bash oxi          # oxwm dari HEAD terbaru
 ```
 
 Installer memverifikasi sendiri hasilnya di akhir: biner (oxwm, st/terminal
@@ -86,30 +89,34 @@ OXWM dibangun dari komit teruji yang di-pin (`472c7675`, reproduksibel);
 `OXWM_LATEST=1` atau `OXWM_PIN=""` untuk HEAD terbaru, `OXWM_PIN=<40-heksa>`
 untuk komit lain.
 
-Sesi otomatis: ada DM -> pakai DM (entri `OXWM` muncul di menu sesi;
-autologin buatan installer yang lama dibersihkan agar tak berebut VT).
+Sesi otomatis tanpa menu: ada DM -> DM itu dipakai (entri `OXWM` muncul di
+menu sesi; autologin buatan oxi yang lama dibersihkan agar tak berebut VT).
 Tanpa DM -> login konsol otomatis di tty1, lalu `startx` jalan sendiri
-memakai `~/.xinitrc`. TTY lain tetap login manual biasa. Pindah
-belakangan (pasang/copot DM) cukup jalankan ulang installer: ia beralih
-sendiri antara mode DM dan autologin.
+memakai `~/.xinitrc`. TTY lain tetap login manual biasa. Pasang/copot DM
+belakangan lalu jalankan ulang `oxi`: ia beralih sendiri antara mode DM dan
+autologin.
 
-## Pilihan instalasi (menu interaktif)
+## TUI dan pilihan terminal
 
-Saat dijalankan di terminal, installer menanyakan dua hal (masing-masing
-dengan penjelasan; Enter = bawaan; mode pipe/`OXWM_YES` otomatis pakai bawaan).
-Selalu berdampingan dengan DE/WM yang sudah ada - tidak ada opsi hapus.
+Saat dijalankan di terminal, `oxi` menampilkan TUI seperti installer DMS:
 
-1. **Sesi login** - menu ini hanya muncul bila **belum ada** display
-   manager (bila sudah ada, DM itu dipakai tanpa bertanya). Pilihannya:
-   autologin tty1 (bawaan) atau pasang DM (`sddm`/`gdm`/`lightdm`;
-   yang tak ada di repo disembunyikan). DM lama yang digantikan dimatikan
-   (berlaku reboot, tanpa `--now` agar sesi berjalan tak mati).
+1. **Ringkasan** - banner, distro/arsitektur, deteksi sesi (DM yang ada
+   atau autologin), dan daftar komponen yang akan dipasang.
 2. **Terminal** - `st` (bawaan: build 3 tema), `alacritty`, `kitty`,
    `ghostty` (dari repo; yang tak ada disembunyikan, mis. `ghostty`
-   di Debian). **Semua ikut `oxt`**: ganti tema memperbarui warna
-   terminal juga (kitty/ghostty reload otomatis, alacritty berlaku di
-   terminal baru). Config baru ditemplat otomatis (`local terminal`,
-   semua `st -e`, dan keybind wiremix); config lama tidak diubah.
+   di Debian). Navigasi ↑/↓, Enter memilih, Esc kembali.
+3. **Konfirmasi** - ringkasan akhir + peringatan; Enter mulai.
+4. **Progres** - bar, tahap yang selesai/berjalan, dan output terakhir.
+5. **Selesai/gagal** - langkah reboot, perintah `oxt`/`oxu`, dan log.
+
+Tidak ada menu sesi/login manager: DM yang terdeteksi dipakai apa adanya,
+tanpa DM berarti autologin tty1 + startx. Mode pipe tanpa `/dev/tty` atau
+`OXWM_YES=1` melewati TUI dan memakai `st` sebagai bawaan (untuk CI/otomasi).
+
+**Semua terminal ikut `oxt`**: ganti tema memperbarui warna terminal juga
+(kitty/ghostty reload otomatis, alacritty berlaku di terminal baru). Config
+baru ditemplat otomatis (`local terminal`, semua `st -e`, dan keybind
+wiremix); config lama tidak diubah.
 
 ## Pembaruan (`oxu`)
 
@@ -122,14 +129,14 @@ oxu --check    # cek saja (tanpa root pun bisa)
 ```
 
 `oxu` selalu mengunduh installer terbaru dulu (pin ikut terbaru), lalu
-membandingkan dengan catatan versi di `/var/lib/oxwm-installer/`
+membandingkan dengan catatan versi di `/var/lib/oxi/`
 (komit oxwm/st, versi zig/font/fastfetch). Paket repo (`dmenu`, `btop`,
 `fastfetch` Debian baru, dst.) tetap urusan `pacman -Syu`/`apt upgrade`.
 Bila `fastfetch` atau `zig` hilang, `oxu` memasangnya kembali (fastfetch
 dari repo, zig dari tarball pin bila serinya tak cocok); `--check` butuh
 jaringan untuk membandingkan dengan upstream. Mode internal
 `OXWM_ACTION=uninstall` ikut membuang biner `oxu` + state ini.
-Jalankan sekali `sudo ./install.sh` (atau reinstall) agar perintah `oxu`
+Jalankan sekali `sudo ./oxi` (atau reinstall) agar perintah `oxu`
 terpasang di `/usr/local/bin`.
 
 ## Shortcut dasar OXWM (config bawaan)
@@ -164,17 +171,18 @@ lalu me-reload oxwm (reload manual dengan `Super+Shift+R` bila tak ada X).
 
 ## Troubleshooting
 
-- **"jalankan dengan sudo"** -> pakai `sudo ./install.sh`, bukan sebagai root langsung.
+- **"jalankan dengan sudo"** -> pakai `sudo ./oxi`, bukan sebagai root langsung.
 - **"distro tidak didukung"** -> butuh Arch Linux, Debian/Ubuntu, atau Fedora.
-- **Gagal di satu paket** -> baca pesan error + log (`/var/log/oxwm-installer/install.log`), perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten; `OXWM_REBUILD=1` bila ingin bangun ulang dari source).
+- **Gagal di satu paket** -> baca pesan error + log (`/var/log/oxi/install.log`), perbaiki (biasanya mirror/koneksi), jalankan ulang (script idempoten; `OXWM_REBUILD=1` bila ingin bangun ulang dari source).
 - **Config lama** -> tersimpan di `~/.config-backup-TANGGAL-JAM/`, tinggal kembalikan manual.
-- **Cek riwayat tahap** -> `grep '\[.*\]' /var/log/oxwm-installer/install.log`.
+- **Cek riwayat tahap** -> `grep '\[.*\]' /var/log/oxi/install.log`.
 
 ## Struktur repo
 
 ```
-oxwm-installer/
-├── install.sh                       # script utama (menu interaktif, tanpa flag CLI)
+oxi/
+├── oxi                              # script utama (TUI, tanpa flag CLI)
+├── install.sh                       # shim kompatibilitas -> oxi (untuk URL lama)
 ├── bin/oxwm-theme                  # perintah ganti tema (terpasang ke /usr/local/bin)
 ├── bin/oxt                        # alias ke oxwm-theme
 ├── bin/oxu, bin/oxwm-update        # perintah pembaruan mandiri (terpasang ke /usr/local/bin)

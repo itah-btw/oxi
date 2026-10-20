@@ -1,4 +1,4 @@
-# oxwm-installer: tema catppuccin (disalin oxt ke config; ghostty reload otomatis, ikut oxt).
+# oxi: tema catppuccin (disalin oxt ke config; ghostty reload otomatis, ikut oxt).
 font-family = "JetBrainsMono Nerd Font"
 font-size = 10
 background = 1e1e2e

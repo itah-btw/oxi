@@ -10,7 +10,7 @@ jobs:
       - name: Pasang shellcheck
         run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
       - name: shellcheck
-        run: shellcheck -S info install.sh bin/*
+        run: shellcheck -S info oxi install.sh bin/*
   install:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -36,8 +36,8 @@ jobs:
       - name: Jalankan installer (nyata)
         shell: bash
         run: |
-          su - tester -c "sudo env OXWM_YES=1 OXWM_NO_UPDATE=1 bash '$GITHUB_WORKSPACE/install.sh'"
+          su - tester -c "sudo env OXWM_YES=1 OXWM_NO_UPDATE=1 bash '$GITHUB_WORKSPACE/oxi'"
       - name: Tampilkan log installer
         if: failure()
         shell: bash
-        run: cat /var/log/oxwm-installer/install.log 2>/dev/null || true
+        run: cat /var/log/oxi/install.log 2>/dev/null || true

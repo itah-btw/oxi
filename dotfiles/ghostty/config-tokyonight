@@ -1,4 +1,4 @@
-# oxwm-installer: tema tokyonight (disalin oxt ke config; ghostty reload otomatis, ikut oxt).
+# oxi: tema tokyonight (disalin oxt ke config; ghostty reload otomatis, ikut oxt).
 font-family = "JetBrainsMono Nerd Font"
 font-size = 10
 background = 1a1b26
